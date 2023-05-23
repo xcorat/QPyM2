@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# repo specific folders
+data/
+scripts/
+tests/
+scripts/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+
