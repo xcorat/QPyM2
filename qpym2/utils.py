@@ -44,4 +44,24 @@ def get_ncores(print_state=False):
         print(f'{nthreads_available=}')
         print(f'{ncores_available=}')
 
-    return ncores_available  
+    return ncores_available
+
+from scipy.stats import gaussian_kde
+from scipy.optimize import minimize_scalar
+import numpy as np
+def get_mode(arr):
+    """ Get the mode of the array `arr` using a gaussian kernel density estimation. """
+    # TODO: error checking and performance!!
+    arr = np.array(arr)
+    mean = arr.mean()
+    marr = arr/mean - 1
+    kde = gaussian_kde(marr, bw_method=1.0)
+    xmax = minimize_scalar( lambda x: -kde.evaluate(x), bounds=(marr.min(), marr.max()), method='bounded').x.item()
+
+    # TODO: check with other methods
+    # print(mean, (xmax + 1)*mean)
+    return (xmax + 1)*mean
+
+def find_mode(varnames, trace):
+    """ Find the mode of the variables in `varnames` from the `trace` object. """
+    return [ get_mode(trace.posterior[varname].values.flatten()) for varname in varnames ]
