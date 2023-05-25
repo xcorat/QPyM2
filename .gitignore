@@ -10,4 +10,7 @@ scripts/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
+# VSCode
+.vscode/
+
 
