@@ -1,5 +1,15 @@
 """ Contains utulity classes and routines. """
 
+_DEBUG_ = 5
+
+def log(level:int, *args, **kwargs):
+    """ log output (print) if log `level` is less than the `_DEBUG_` level """ 
+    if _DEBUG_ >= level:
+        print(*args, **kwargs)
+
+def debug(*args, **kwargs):
+    log(5, *args, **kwargs)
+
 class TempConfig:
     """ A temporary configuration class that will have all the keyword arguments 
         implemented as data members.
