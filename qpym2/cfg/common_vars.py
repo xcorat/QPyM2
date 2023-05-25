@@ -21,11 +21,11 @@ fitdir = '/global/homes/x/xcorat/Software//QPyM2/pdata/nat21_roi310_unblinded'
 
 staging_config = {
     'outpath': stagedir,
-    'outtree_name': 'uvtree',
+    'treename': 'uvtree',
     # 'fname_assembler': lambda fname, shift_name: f'{fname}_{shift_name}',
     # TODO: this is named 'out_cols' 
-    'out_cols_mc' : ['u', 'v', 'Ch1', 'Ch2', 'Dataset', 'PCA', 'MultipletValidation'],
-    'out_cols_data' : ['u', 'v', 'Ch1', 'Ch2', 'Dataset', 'PCA', 'PCA8', 'Validation', 'Validation8']
+    'out_cols' : ['u0', 'v0', 'ch1', 'ch2' ], #, 'Dataset', 'PCA', 'MultipletValidation'],
+    # 'out_cols_data' : ['u0', 'v0', 'ch1', 'ch2' ], #, 'Dataset', 'PCA', 'PCA8', 'Validation', 'Validation8']
 }
 
 read_config = {
@@ -216,6 +216,8 @@ shifts = {
     'ushiftp15': { 'fname_postfix' : 'ushiftp15', 'shift': 1.5, 'transform': ( '(esum + 0.0015*e1)/sqrt(2)', '(2*e1 + 0.0015*e1 - esum)/sqrt(2)') },
 }
 cfg_m2nat21_may23 = TempConfig(
+    ares_config = read_config,
+    staging_cuts = cuts,
     outdir =  fitdir,
     datapath = datapath,
     staging_config = staging_config,
