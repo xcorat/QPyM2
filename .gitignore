@@ -12,5 +12,6 @@ scripts/
 
 # VSCode
 .vscode/
+*.code-workspace
 
 
