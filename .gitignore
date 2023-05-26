@@ -12,5 +12,15 @@ scripts/
 
 # VSCode
 .vscode/
+*.code-workspace
+.history/
+
+# Compiled sources -- just in case
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
 
 
