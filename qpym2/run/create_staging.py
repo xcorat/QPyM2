@@ -111,13 +111,11 @@ def create_staging_all_mp(cfg, multiproc=True, ncores=None):
         ret_mc = [_create_rdf(fname) for fname in table.fname]
         ret_0v = [_create_rdf_0v(fname_0v)]
 
-def create_staging_mp_0v(cfg, multiproc=True, ncores=None):
+def create_staging_0v(cfg):
     """ Create the staging files. 
         
     Args:
         cfg (dict): configuration dictionary that holds all the configuration settings.
-        multiproc (bool): if True, use multiprocessing.
-        ncores (int): number of cores to use. If None, use all available cores.
     """
     from multiprocessing import Pool
     from qpym2.utils import get_ncores
@@ -131,15 +129,7 @@ def create_staging_mp_0v(cfg, multiproc=True, ncores=None):
                                          out_fname=out_fname)
     fname_0v = read_config_0v['fname']
 
-    if multiproc:
-        debug('starting pool...')
-        if ncores is None or ncores == 1:
-            ncores = get_ncores()
-        with Pool() as pool:
-            ret = pool.map(_create_rdf_0v, [fname_0v])
-        debug('end pool...', len(ret))
-    # else:
-    #         ret = [_create_rdf_0v(fname) for fname in table.fname]
+    ret = [_create_rdf_0v(fname) for fname in [fname_0v]]
 
 if __name__ == '__main__':
     """ Create the staging files. """
