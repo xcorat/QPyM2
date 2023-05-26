@@ -1,8 +1,14 @@
-""" Contains utulity classes and routines. """
+""" Contains utulity classes and routines. 
+
+TODO: Move things into appropriate modules.
+
+    + Move the logs into a seperate module and implement proper logging.
+    + Math utilities should go into a seperate module. (include hist routines too)
+"""
 
 _DEBUG_ = 5
 
-def log(level:int, *args, **kwargs):
+def log(level, *args, **kwargs):
     """ log output (print) if log `level` is less than the `_DEBUG_` level """ 
     if _DEBUG_ >= level:
         print(*args, **kwargs)

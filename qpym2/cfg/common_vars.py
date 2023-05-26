@@ -38,8 +38,9 @@ read_config = {
 }
 
 read_config_0v = {
-    'inpath':'',
-    'inpath_full': f'{datapath}/MC/ares/nat21_highstats/0vbb/0vbb_1M_*.root',
+    # 'inpath_full': f'{datapath}/MC/ares/nat21_highstats/0vbb/0vbb_1M_*.root',
+    'inpath':f'{datapath}/MC/ares/nat21_highstats/0vbb',
+    'fname': '0vbb_1M_*.root',
     'treename': 'outTree',
     'evar': 'Energy',
     'esum_var': 'TotalEnergy',
@@ -217,6 +218,7 @@ shifts = {
 }
 cfg_m2nat21_may23 = TempConfig(
     ares_config = read_config,
+    ares_config_0v = read_config_0v,
     staging_cuts = cuts,
     outdir =  fitdir,
     datapath = datapath,
