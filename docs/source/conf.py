@@ -28,3 +28,4 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 
 source_suffix = ['.md']
+master_doc = 'index.md'
