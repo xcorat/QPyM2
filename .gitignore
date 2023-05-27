@@ -12,7 +12,7 @@ scripts/
 
 # VSCode
 .vscode/
-*.code-workspace
+**/*.code-workspace
 .history/
 
 # Compiled sources -- just in case
