@@ -3,6 +3,7 @@ __pycache__/
 *$py.class
 
 # Distribution / packaging
+*.egg-info/
 build/
 scripts/
 tests/
