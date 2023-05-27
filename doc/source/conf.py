@@ -33,4 +33,4 @@ html_static_path = ['_static']
 
 # Sphinx and autodoc configuration
 source_suffix = ['.rst', '.md']
-autodoc2_packages = ['../qpym2']
+autodoc2_packages = ['../../qpym2']
