@@ -8,7 +8,7 @@ TODO: Move things into appropriate modules.
 
 _DEBUG_ = 5
 
-def log(level, *args, **kwargs):
+def log(level:int, *args, **kwargs):
     """ log output (print) if log `level` is less than the `_DEBUG_` level """ 
     if _DEBUG_ >= level:
         print(*args, **kwargs)

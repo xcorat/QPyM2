@@ -5,7 +5,6 @@ __pycache__/
 data/
 scripts/
 tests/
-scripts/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
