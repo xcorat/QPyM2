@@ -1,10 +1,16 @@
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# repo specific folders
-data/
+# Distribution / packaging
+build/
 scripts/
 tests/
+# repo specific folders
+data/
+
+# add all .gitignore files TODO:
+# !**/.gitignore
 
 # Jupyter Notebook
 .ipynb_checkpoints/
