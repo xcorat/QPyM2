@@ -5,13 +5,21 @@ __pycache__/
 data/
 scripts/
 tests/
-scripts/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
 
 # VSCode
 .vscode/
-*.code-workspace
+**/*.code-workspace
+.history/
+
+# Compiled sources -- just in case
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
 
 
