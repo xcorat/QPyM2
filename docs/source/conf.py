@@ -16,7 +16,9 @@ release = '0.0.1'
 
 extensions = [
     "myst_parser",
-    "sphinx.ext.autodoc",
+    "autodoc2",
+    # "sphinx.ext.autodoc",
+    "sphinx.ext.duration",
 ]
 
 templates_path = ['_templates']
@@ -31,3 +33,5 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 
 source_suffix = ['.rst', '.md']
+
+autodoc2_packages = ['../../qpym2']
