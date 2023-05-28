@@ -10,6 +10,8 @@ astroid==2.15.5
     # via sphinx-autodoc2
 babel==2.12.1
     # via sphinx
+beautifulsoup4==4.12.2
+    # via furo
 certifi==2023.5.7
     # via requests
 charset-normalizer==3.1.0
@@ -18,6 +20,8 @@ docutils==0.19
     # via
     #   myst-parser
     #   sphinx
+furo==2023.5.20
+    # via -r requirements.in
 idna==3.4
     # via requests
 imagesize==1.4.1
@@ -43,17 +47,26 @@ myst-parser==1.0.0
 packaging==23.1
     # via sphinx
 pygments==2.15.1
-    # via sphinx
+    # via
+    #   furo
+    #   sphinx
 pyyaml==6.0
     # via myst-parser
 requests==2.31.0
     # via sphinx
 snowballstemmer==2.2.0
     # via sphinx
+soupsieve==2.4.1
+    # via beautifulsoup4
 sphinx==6.2.1
-    # via myst-parser
+    # via
+    #   furo
+    #   myst-parser
+    #   sphinx-basic-ng
 sphinx-autodoc2==0.4.2
     # via -r requirements.in
+sphinx-basic-ng==1.0.0b1
+    # via furo
 sphinxcontrib-applehelp==1.0.4
     # via sphinx
 sphinxcontrib-devhelp==1.0.2
