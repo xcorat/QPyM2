@@ -28,15 +28,15 @@ Requirements:
   * sphinx, autodoc2, myst-parser, pip-tools
 
 The documentation and reference manual is built using [Sphinx] and [autodoc2]. 
-The documentation is build automatically at [readthedocs.io](https://qpym2.readthedocs.io) when the `ref_docs` branch is updated. To build and setup (for a new project only,)
+The documentation is build automatically at [readthedocs.io](https://qpym2.readthedocs.io) when the `docs` branch is updated. To build and setup (for a new project only,)
 
 1. Install sphinx and autodoc2 if not already installed.
-2. To generate the initial files, run `sphinx-quickstart` in the `docs` directory.
-3. Edit the `docs/conf.py` and add:
+2. To generate the initial files, run `sphinx-quickstart` in the `doc` directory.
+3. Edit the `doc/conf.py` and add:
     + extensions `myst-parser` and `autodoc2`
     + autodoc and sphinx parameters (including the path to the python package)
-4. Create the `docs/requirements.in` file and add the required packages, and
-    run `pip-compile` to generate the `docs/requirements.txt` file.
+4. Create the `requirements.in` file and add the required packages, and
+    run `pip-compile` to generate the `requirements.txt` file.
 
 
 
