@@ -2,7 +2,7 @@
 
 from qpym2.utils import debug # as print
 
-def read_rdf(fname, treename, defs=[], filters=[]):
+def read_rdf(fname, treename, defs=[], filters=[], add_friends=[]):
     """ Read a ROOT file and return the RDataFrame. Implements the branch
     definitions and filters.
 
@@ -11,13 +11,31 @@ def read_rdf(fname, treename, defs=[], filters=[]):
         treename (str): name of the tree.
         defs (list of (alias, def)): list of branch definitions.
         filters (list of string): list of filters. Default is None.
+        add_friends (list of (fname, treename)): list of friend trees to be added. 
+            If fname is None, use the same file.
     
     Returns:
         RDataFrame: the RDataFrame object.
     """
     from ROOT import RDataFrame as RDF
+    from ROOT import TChain
 
-    rdf = RDF(treename, fname)
+    if len(add_friends) > 0:
+        tc = TChain(treename)
+        tc.Add(fname)
+
+        tcfs = []
+        for friend in add_friends:
+            tcf = TChain(friend[1])
+            tcf.Add(friend[0] or fname)
+            
+            tcfs.append(tcf) # Do we need to keep this list?
+            tc.AddFriend(tcf)
+
+        rdf = RDF(tc)
+    else:
+        rdf = RDF(treename, fname)
+
     for alias, def_ in defs:
         rdf = rdf.Define(alias, def_)
     for f in filters:
@@ -25,7 +43,7 @@ def read_rdf(fname, treename, defs=[], filters=[]):
     return rdf
 
 def create_rdf(input_fname, input_treename, output_fname, output_treename,
-               defs=[], filters=[] , transforms=[], output_cols=[]):
+               defs=[], filters=[] , transforms=[], output_cols=[], input_add_friends=[]):
     """ Create a ROOT file with the RDataFrame. Implements the branch
     definitions and filters.
 
@@ -38,8 +56,10 @@ def create_rdf(input_fname, input_treename, output_fname, output_treename,
         filters (list of string): list of filters. 
         output_cols (list of string): list of columns to be saved in the output
             tree. 
+        input_add_friends (list of (fname, treename)): list of friend trees to be added.
+            while reading the input. If fname is None, use the same file.
     """
-    rdf = read_rdf(input_fname, input_treename, defs, filters)
+    rdf = read_rdf(input_fname, input_treename, defs, filters, add_friends=input_add_friends)
     rdf.Snapshot(output_treename, output_fname, output_cols)
 
 def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}, filters=[]):
@@ -77,7 +97,8 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
         'evar': 'Energy',
         'esum_var': 'TotalEnergy',
         'ch1': 'Channel',
-        'ch2': 'Multiplet[1]'   
+        'ch2': 'Multiplet[1]',
+        'add_friends': [], # list of (fname, treename) of friend trees to be added
     }
     _FILTERS_DEFAULT = ['Multiplicity==2']
     _WRITE_CONFIG_DEFAULT = {
@@ -96,6 +117,8 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
     defs.append(('u0', f'{read_config["esum_var"]}/sqrt(2)'))
     defs.append(('v0', f'(2*{read_config["evar"]} - {read_config["esum_var"]})/sqrt(2)'))
     
+    input_add_friends = read_config.get('add_friends', None)
+
     filters = _FILTERS_DEFAULT + filters
     write_config = {**_WRITE_CONFIG_DEFAULT, **write_config} # merge the two dicts with write_config overriding the default
     if out_fname == '':
@@ -104,5 +127,6 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
     debug('in: ', f'{mcpath}/{fname}')
     create_rdf(input_fname=f'{mcpath}/{fname}', input_treename=read_config['treename'],
                output_fname=out_fname, output_treename=write_config['treename'],
-               defs=defs, filters=filters, output_cols=write_config['out_cols'])
+               defs=defs, filters=filters, output_cols=write_config['out_cols'],
+               input_add_friends=input_add_friends)
     debug('out: ', out_fname)

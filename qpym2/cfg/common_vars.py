@@ -19,6 +19,10 @@ ares_outpath = f'{datapath}/BM_Nature2021/out_ares'
 stagedir = f'{datapath}/MC/staging_nat21_roi310_unblinded'
 fitdir = '/global/homes/x/xcorat/Software//QPyM2/pdata/nat21_roi310_unblinded'
 
+# ---------------- Cuts ---------------
+cuts = "Multiplicity == 2"
+datacuts = 'cutsTree.Included && cutsTree.FullMultiplet'
+mccuts = 'AllFilters && PCA && MultipletValidation'
 staging_config = {
     'outpath': stagedir,
     'treename': 'uvtree',
@@ -34,7 +38,8 @@ read_config = {
     'evar': 'Energy',
     'esum_var': 'TotalEnergy',
     'ch1': 'Channel',
-    'ch2': 'Multiplet[1]'
+    'ch2': 'Multiplet[1]',
+    'extra_cuts': mccuts,
 }
 
 read_config_0v = {
@@ -45,8 +50,23 @@ read_config_0v = {
     'evar': 'Energy',
     'esum_var': 'TotalEnergy',
     'ch1': 'Channel',
-    'ch2': 'Multiplet[1]'
+    'ch2': 'Multiplet[1]',
+    'extra_cuts': mccuts,
 }
+
+# ---------------- End staging data -----------
+read_config_data = {
+    'inpath': '/global/cfs/projectdirs/cuore/scratch/xcorat/data//BM_Nature2021',
+    'fname': 'Reduced_Nature21.root',
+    'treename': 'outTree',
+    'evar': 'Energy',
+    'esum_var': 'TotalEnergy',
+    'ch1': 'Channel',
+    'ch2': 'Multiplet[1]',
+    'out_fpath': f'{datapath}/MC/mcuvs_roi310/data_unblinded.root',
+    'extra_cuts': datacuts,
+}
+
 
 # --------------- Staging model ---------------
 hcfg = {
@@ -57,9 +77,8 @@ hcfg = {
 hist_cuts = f"{read_config['esum_var']}>{hcfg['esum_min']} && {read_config['esum_var']}<{hcfg['esum_max']}"
 hist_cuts += f" && {read_config['evar']}>{read_config['esum_var']}/2 && {read_config['esum_var']}-{read_config['evar']} > {hcfg['threshold']}"
 
-cuts = "AllFilters && Multiplicity == 2 && " + hist_cuts 
- # --------------- End staging model -----------
-
+cuts = cuts + " && " + hist_cuts 
+# --------------- End staging model -----------
 
 s2 = math.sqrt(2)
 threshold = 350
@@ -80,7 +99,7 @@ cut_0v1775 = f'u>1775'
 cut_0v1740 = f'u>1740'
 cut_v150 = f'v>150'
 
-
+# TODO: 6/1/23 - we don't need the PCA and MultipletValidation cuts on staging data.
 run_configs = \
 {
     'noco2_no0v1775_v150_smooth': 
@@ -219,6 +238,7 @@ shifts = {
 cfg_m2nat21_may23 = TempConfig(
     ares_config = read_config,
     ares_config_0v = read_config_0v,
+    data_config = read_config_data,
     staging_cuts = cuts,
     outdir =  fitdir,
     datapath = datapath,
