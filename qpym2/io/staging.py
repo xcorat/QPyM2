@@ -1,7 +1,8 @@
 """ input output related to staging data. """
 
-from qpym2.utils import debug
-from qpym2.io.rdf import read_rdf, create_rdf
+from qpym2.utils import debug, log
+from qpym2.io.rdf import create_rdf
+from qpym2 import hists
 
 def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}, filters=[]):
     """ Create the RDataFrame from the MC files for M2 analysis.
@@ -71,3 +72,37 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
                defs=defs, filters=filters, output_cols=write_config['out_cols'],
                input_add_friends=input_add_friends)
     debug('out: ', out_fname)
+
+def read_hist(fpath, hm, treename='uvtree', defs=[], filters=[], rtype='numpy'):
+    """ Read a ROOT file and return the histogram. Implements the branch
+    definitions and filters.
+
+    Args:
+        fpath (str): path to the ROOT file.
+        hm (hist_model): hist model
+        treename (str): name of the tree. Defaults to 'uvtree'.
+        defs (list of (alias, def)): list of branch definitions.
+        filters (list of string): list of filters. Default is None.
+        rtype (str): return type. 'numpy' or 'root'. Default is 'numpy'.
+
+    Returns:
+        histogram: (histo, xedges, yedges) if return_numpy is True. otherwise return a THist variant (ROOT)
+    """
+    from ROOT import RDataFrame as RDF
+
+    debug('reading :', fpath)
+    rdf = RDF(treename, fpath)
+
+    if rdf.Count().GetValue() == 0:
+        log(2, 'empty rdf: ', fpath)
+        return hists.get_empty_hist(hm)
+
+    for alias, def_ in defs:
+        debug('defining: ', alias, def_)
+        rdf = rdf.Define(alias, def_)
+    for f in filters:
+        debug('filtering: ', f)
+        rdf = rdf.Filter(f)
+
+    return hists.get_hist_from_rdf(rdf, hm, rtype=rtype)
+    
