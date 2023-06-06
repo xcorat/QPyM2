@@ -38,6 +38,7 @@ def read_rdf(fname, treename, defs=[], filters=[], add_friends=[]):
         rdf = rdf.Define(alias, def_)
     for f in filters:
         rdf = rdf.Filter(f)
+
     return rdf
 
 def create_rdf(input_fname, input_treename, output_fname, output_treename,

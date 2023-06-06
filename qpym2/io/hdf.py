@@ -19,7 +19,9 @@ Used to make sure all the input data needed for analysis is self contained.
 """
 
 import os
+import h5py
 import pandas as pd
+import numpy as np
 
 from qpym2.utils import log
 
@@ -63,7 +65,7 @@ def _write_df(df, outpath, key, overwrite=False, **kwargs):
 
         h5f.put(key, df, **kwargs)
 
-def _write_hists(hists, outpath, group_name, names=None, overwrite=False):
+def _write_hists(hists, outpath, group_name, names=None, overwrite=False, append_hist=False):
     """ write the list of mchists to a file. The hists are stored as is (numpy arrays) with names given. 
 
     Args:
@@ -73,25 +75,29 @@ def _write_hists(hists, outpath, group_name, names=None, overwrite=False):
         names (list of str): names of the histograms. If None, use the index of the list.
         overwrite (bool): Indicate whether to overwrite all histograms. If false and the `group_name` exists,
             throw an error.
+        append_hist (bool): Indicate whether to append the histograms to the existing group. If false and the
+            `group_name` exists, throw an error.
         
     """
     if not names:
         if 'name' in hists:
             names  = [ hist.name for hist in hists ]
         else:
-            names = hist.index
+            names = hists.index
 
-    with pd.HDFStore(outpath, 'a') as h5f:
+    with h5py.File(outpath, 'a') as h5f:
         if group_name in h5f:
             if overwrite:
                 log(2, f"Recreating group '{group_name}'. Previous data might be lost.")
                 del h5f[group_name]
+            elif append_hist:
+                log(2, f"Appending histograms to group '{group_name}'. Previous data might be lost.")
             else:
                 raise ValueError(f'Unable to create group \'{group_name}\' (name already exists).'
                                     'You can overwrite data by passing the argument `overwrite=True`')
 
         for name, hist in zip(names, hists):
-            h5f.put(f'{group_name}/{name}', hist)
+            h5f.create_dataset(f'{group_name}/{name}', data=hist)
 
 def _write_data(data, outpath, dataname, overwrite=False):
     """ write data (np.array) to h5 file. If overwrite is set, overwrite data.
@@ -103,7 +109,7 @@ def _write_data(data, outpath, dataname, overwrite=False):
         overwrite (bool): overwrite the file if it exists. Default is False.
     """
 
-    with pd.HDFStore(outpath, 'a') as h5f:
+    with h5py.File(outpath, 'a') as h5f:
         if dataname in h5f:
             if overwrite:
                 log(2, f"Recreating group '{dataname}'. Previous data might be lost.")
@@ -112,7 +118,7 @@ def _write_data(data, outpath, dataname, overwrite=False):
                 raise ValueError(f'Unable to create group \'{dataname}\' (name already exists).'
                                     'You can overwrite data by passing the argument `overwrite=True`')
 
-        h5f.put(dataname, data)
+        h5f.create_dataset(dataname, data=data)
 
 def write_input(outpath, mctable, signal_df, data,
                 signal_name=None, mkchain=None, overwrite=False, **kwargs):
@@ -130,6 +136,8 @@ def write_input(outpath, mctable, signal_df, data,
     TODO: NOTE: seperate functions to write table, data, signal, etc might be better 
         if we are trying to improve performance using multiprocessing. By seperating
         the write functions, we don't need to wait till all the reading is done.
+
+    TODO: We probably want custom 
     """
     if not overwrite and os.path.exists(outpath):
         log(2, f'WARNING: The file {outpath} exists. '
@@ -143,8 +151,9 @@ def write_input(outpath, mctable, signal_df, data,
         # TODO: check if this is a pd.DataFrame. if not use _SIGNAL_KEY_NAME?
         signal_name = signal_df.index[0]
     _write_df(signal_df[_BKG_MODEL_TABLE_COLS], outpath, key=signal_name, overwrite=overwrite, **kwargs)
+    # We are adding signal to the existing group, so do not overwrite here and turn on append.
     _write_hists(signal_df['mchist'], outpath, group_name=_MCHISTS_GNAME, names=[signal_name],
-                 overwrite=overwrite, **kwargs)
+                 overwrite=False, append_hist=True, **kwargs)
 
     if data is not None:
         _write_data(data, outpath, dataname=_DATA_NAME, overwrite=overwrite, **kwargs)
@@ -152,3 +161,59 @@ def write_input(outpath, mctable, signal_df, data,
     if mkchain is not None:
         _write_df(mkchain, outpath, key=_MKCHAIN_KEY_NAME, overwrite=overwrite, **kwargs)
     
+# TODO: redo these with proper docs
+def read_mkchain(h5path):
+    return pd.read_hdf(h5path, key='mkchain')
+
+def read_bkg_model_fit(h5path):
+    return pd.read_hdf(h5path, key='bkg_model')
+
+def read_bkg_model(h5path):
+    """ Read the background model table from input. 
+    Returns:
+        pd.DataFrame: columns = _BKG_MODEL_TABLE_COLS_, 'mchist'
+    """
+    mcfit_table = read_bkg_model_fit(h5path)
+    mchists = read_mchists(h5path, _MCHISTS_GNAME)
+    mchists.name = 'mchist'
+    return pd.concat([mcfit_table, mchists], axis=1, join='inner')
+
+def read_data(h5path, dataname='data'):
+    with h5py.File(h5path, 'r') as h5f:
+        # TODO: Implement error handling to improve error messages
+        data = np.array(h5f[dataname])
+    
+    return data
+
+def read_signal(h5path, name):
+    """ read the table row related to the signal component named `name`"""
+    # TODO: we can do this more efficiently
+    sig_table = pd.read_hdf(h5path, key=name)
+    hist = read_single_mchist(h5path, mcname=name, group_name=_MCHISTS_GNAME)
+    sig_table['mchist'] = [ hist ]
+    sig_table['integral'] = [ np.sum(hist) ]
+    return sig_table
+
+
+def read_ndbd(h5path):
+    return pd.read_signal(h5path, name='ndbd')
+
+def read_single_mchist(h5path, mcname, group_name=_MCHISTS_GNAME):
+    """ read the list of mchists from a file. The hists are returned as a pd series indexed 
+    by the name in the dataset
+    """
+    with h5py.File(h5path, 'a') as h5f:
+        mchist_group = h5f[group_name]
+        return mchist_group[mcname][:]
+
+def read_mchists(h5path, group_name=_MCHISTS_GNAME):
+    """ read the list of mchists from a file. The hists are returned as a pd series indexed 
+    by the name in the dataset
+    """
+    with h5py.File(h5path, 'a') as h5f:
+        mchist_group = h5f[group_name]
+        hists = {name: mchist_group[name][:] for name in mchist_group.keys()}
+        hists_series = pd.Series(data=hists)
+
+        return  hists_series
+         

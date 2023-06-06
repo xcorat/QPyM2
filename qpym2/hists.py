@@ -4,6 +4,8 @@ from enum import Enum
 import numpy as np
 from ROOT import TH1D, TH2D
 
+from qpym2.utils import log, debug
+
 def get_hist_settings(hm):
     """ Return the nbins and range parameters for histogram according to the model
 
@@ -18,29 +20,29 @@ def get_hist_settings(hm):
 
     TODO: clean w/ copilot
     """
-
-    if hm.hist_type == 'm2sum':
+    debug(hm.hist_type is HistType.h2uv)
+    if hm.hist_type == HistType.m2sum:
         nbins = math.ceil((hm.esum_max - hm.esum_min)/hm.binsize)
         range = [hm.esum_min, hm.esum_max]
-    elif hm.hist_type == 'm2diff':
+    elif hm.hist_type == HistType.m2diff:
         nbins = math.ceil((hm.ediff_max - hm.ediff_min)/hm.binsize)
         range = [hm.ediff_min, hm.ediff_max]
-    elif hm.hist_type == 'm2e2':
+    elif hm.hist_type == HistType.m2e2:
         nbins = math.ceil((hm.e2max - hm.e2min)/hm.binsize)
         range = [hm.e2min, hm.e2max]
-    elif hm.hist_type == 'h2ee':
+    elif hm.hist_type == HistType.h2ee:
         nbins = [ math.ceil((hm.e1max - hm.e1min)/hm.binsize),
                   math.ceil((hm.e2max - hm.e2min)/hm.binsize) ]
         range = [[hm.e1min, hm.e1max], [hm.e2min, hm.e2max]]
-    elif hm.hist_type == 'h2esume2':
+    elif hm.hist_type == HistType.h2esume2:
         nbins = [ math.ceil((hm.esum_max - hm.esum_min)/hm.binsize),
                  math.ceil((hm.e2max - hm.e2min)/hm.binsize) ]
         range = [[hm.esum_min, hm.esum_max], [hm.e2min, hm.e2max]]
-    elif hm.hist_type == 'h2esumediff':
+    elif hm.hist_type == HistType.h2esumediff:
         nbins = [math.ceil((hm.esum_max - hm.esum_min)/hm.binsize),
                  math.ceil((hm.ediff_max - hm.ediff_min)/hm.binsize) ]
         range = [[hm.esum_min, hm.esum_max], [hm.ediff_min, hm.ediff_max]]
-    elif hm.hist_type == 'h2uv':
+    elif hm.hist_type == HistType.h2uv:
         nbins = [ math.ceil((hm.umax - hm.umin)/hm.binsize),
                   math.ceil((hm.vmax - hm.vmin)/hm.binsize) ]
         range = [[hm.umin, hm.umax], [hm.vmin, hm.vmax]]
@@ -72,6 +74,21 @@ def get_empty_hist(hm, return_numpy=True):
         raise TypeError("nbins shape not supported. 'nbins` Must be 1D or 2D")
 
     return hist
+
+def smooth_nph2(h2, smooth=(1, 'k5b')):
+    log(5, f'smoothing...: {smooth}')
+    nx, ny = h2.shape
+    h2root = TH2D('_QCOMP_h2root', '', nx, 0, nx, ny, 0, ny)
+    for i in range(nx):
+        for j in range(ny):
+            h2root.SetBinContent(i+1,j+1, h2[i][j])
+    h2root.Smooth(smooth[0], smooth[1])
+
+    mchist_smoothed = np.array([
+        [ h2root.GetBinContent(i+1, j+1) for j in range(ny) ] for i in range(nx) 
+    ])
+
+    return mchist_smoothed
 
 HistType = Enum('HistType', 'm2sum m2diff m2e2 h2ee h2esume2 h2esumediff h2uv')
 
@@ -191,11 +208,6 @@ def get_hist_from_rdf(rdf, hm, rtype='numpy'):
 
     TODO: there must be a better version than if-else with enum
     """
-    rdf = rdf.Define('e1', '(u+v)/sqrt(2)')\
-            .Define('e2', '(u-v)/sqrt(2)')\
-            .Define('esum', 'u*sqrt(2)')\
-            .Define('ediff', 'v*sqrt(2)')
-    
     if hm.hist_type == HistType.m2sum:
         return create_hist_m2sum(rdf, hm, rtype)
     elif hm.hist_type == HistType.m2diff:

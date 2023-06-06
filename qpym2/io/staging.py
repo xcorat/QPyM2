@@ -1,5 +1,6 @@
 """ input output related to staging data. """
 
+import numpy as np
 from qpym2.utils import debug, log
 from qpym2.io.rdf import create_rdf
 from qpym2 import hists
@@ -100,9 +101,58 @@ def read_hist(fpath, hm, treename='uvtree', defs=[], filters=[], rtype='numpy'):
     for alias, def_ in defs:
         debug('defining: ', alias, def_)
         rdf = rdf.Define(alias, def_)
+
+    rdf = rdf.Define('e1', '(u+v)/sqrt(2)')\
+        .Define('e2', '(u-v)/sqrt(2)')\
+        .Define('esum', 'u*sqrt(2)')\
+        .Define('ediff', 'v*sqrt(2)')
+    
     for f in filters:
         debug('filtering: ', f)
         rdf = rdf.Filter(f)
 
     return hists.get_hist_from_rdf(rdf, hm, rtype=rtype)
+
+def read_evlist(fpath, treename, defs=[], filters=[], rtype='numpy'):
+    """ Read a ROOT file and return the event list. Implements the branch
+    definitions and filters.
+
+    Args:
+        fpath (str): path to the ROOT file.
+        treename (str): name of the tree.
+        defs (list of (alias, def)): list of branch definitions.
+        filters (list of string): list of filters. Default is None.
+        rtype (str): return type. Default is 'numpy', others not implementd.
+
+    Returns:
+        event list: (u, v) numpy array
+    """
+    from ROOT import RDataFrame as RDF
+
+    debug('reading :', fpath)
+    rdf = RDF(treename, fpath)
+
+    if rdf.Count().GetValue() == 0:
+        log(2, 'empty rdf: ', fpath)
+        return np.array([])
+
+    for alias, def_ in defs:
+        debug('defining: ', alias, def_)
+        rdf = rdf.Define(alias, def_)
+    
+    rdf = rdf.Define('e1', '(u+v)/sqrt(2)')\
+        .Define('e2', '(u-v)/sqrt(2)')\
+        .Define('esum', 'u*sqrt(2)')\
+        .Define('ediff', 'v*sqrt(2)')
+    for f in filters:
+        debug('filtering: ', f)
+        rdf = rdf.Filter(f)
+
+    if rtype == 'numpy':
+        # TODO: this is not efficient, we should be able to get the data directly from the rdf
+        npdata = rdf.AsNumpy(columns=['u', 'v'])
+        data = [ [npdata['u'][i], npdata['v'][i]] for i in range(len(npdata['u']))]
+        return np.array(data, dtype=np.float64)
+    else:
+        raise NotImplementedError
     
