@@ -21,9 +21,9 @@ stagedir = f'{datapath}/MC/staging_nat21_roi310_unblinded'
 fitdir = '/global/homes/x/xcorat/Software//QPyM2/data/nat21_roi310_unblinded'
 
 # ---------------- Cuts ---------------
-cuts = "Multiplicity == 2"
-datacuts = 'cutsTree.Included && cutsTree.FullMultiplet'
-mccuts = 'AllFilters && PCA && MultipletValidation'
+cuts = "PCA && Multiplicity == 2"
+datacuts = 'Validation && cutsTree.Included && cutsTree.FullMultiplet'
+mccuts = 'AllFilters && MultipletValidation'
 staging_config = {
     'outpath': stagedir,
     'treename': 'uvtree',
