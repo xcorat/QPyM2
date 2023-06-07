@@ -6,6 +6,43 @@ from ROOT import TH1D, TH2D
 
 from qpym2.utils import log, debug
 
+HistType = Enum('HistType', ['m2sum', 'm2diff', 'm2e2', 'h2ee', 'h2esume2', 'h2esumediff', 'h2uv'])
+
+def get_h2proj(h2, axis=0):
+    """ Return the projection of a 2D histogram along the specified axis 
+    
+    Parameters
+    ----------
+    h2 : numpy.ndarray
+        The 2D histogram.
+    axis : int
+        The axis along which to project. Default is 0 (x-axis).
+
+    Returns
+    -------
+    h1 : numpy.ndarray
+        The 1D histogram.
+    """
+    return np.sum(h2, axis)
+
+def get_sum_hist(comps, norms):
+    """ Return the sum histogram from the components and their norms
+
+    Parameters
+    ----------
+    comps : pandas.DataFrame
+        The components table.
+    norms : list
+        The list of norms.
+
+    Returns
+    -------
+    sum_hist : numpy.ndarray
+        The sum histogram.
+
+    """
+    return np.sum(norms * comps['pdf_hist'], axis=0)
+
 def get_hist_settings(hm):
     """ Return the nbins and range parameters for histogram according to the model
 
@@ -20,29 +57,30 @@ def get_hist_settings(hm):
 
     TODO: clean w/ copilot
     """
-    debug(hm.hist_type is HistType.h2uv)
-    if hm.hist_type == HistType.m2sum:
+    ht = hm.hist_type.value
+    debug(ht, HistType.m2sum.value)
+    if ht == HistType.m2sum.value:
         nbins = math.ceil((hm.esum_max - hm.esum_min)/hm.binsize)
         range = [hm.esum_min, hm.esum_max]
-    elif hm.hist_type == HistType.m2diff:
+    elif ht == HistType.m2diff.value:
         nbins = math.ceil((hm.ediff_max - hm.ediff_min)/hm.binsize)
         range = [hm.ediff_min, hm.ediff_max]
-    elif hm.hist_type == HistType.m2e2:
+    elif ht == HistType.m2e2.value:
         nbins = math.ceil((hm.e2max - hm.e2min)/hm.binsize)
         range = [hm.e2min, hm.e2max]
-    elif hm.hist_type == HistType.h2ee:
+    elif ht == HistType.h2ee.value:
         nbins = [ math.ceil((hm.e1max - hm.e1min)/hm.binsize),
                   math.ceil((hm.e2max - hm.e2min)/hm.binsize) ]
         range = [[hm.e1min, hm.e1max], [hm.e2min, hm.e2max]]
-    elif hm.hist_type == HistType.h2esume2:
+    elif ht == HistType.h2esume2.value:
         nbins = [ math.ceil((hm.esum_max - hm.esum_min)/hm.binsize),
                  math.ceil((hm.e2max - hm.e2min)/hm.binsize) ]
         range = [[hm.esum_min, hm.esum_max], [hm.e2min, hm.e2max]]
-    elif hm.hist_type == HistType.h2esumediff:
+    elif ht == HistType.h2esumediff.value:
         nbins = [math.ceil((hm.esum_max - hm.esum_min)/hm.binsize),
                  math.ceil((hm.ediff_max - hm.ediff_min)/hm.binsize) ]
         range = [[hm.esum_min, hm.esum_max], [hm.ediff_min, hm.ediff_max]]
-    elif hm.hist_type == HistType.h2uv:
+    elif ht == HistType.h2uv.value:
         nbins = [ math.ceil((hm.umax - hm.umin)/hm.binsize),
                   math.ceil((hm.vmax - hm.vmin)/hm.binsize) ]
         range = [[hm.umin, hm.umax], [hm.vmin, hm.vmax]]
@@ -89,8 +127,6 @@ def smooth_nph2(h2, smooth=(1, 'k5b')):
     ])
 
     return mchist_smoothed
-
-HistType = Enum('HistType', 'm2sum m2diff m2e2 h2ee h2esume2 h2esumediff h2uv')
 
 # TODO: replace nbins, range calculation with the function above <15mins (after testing)
 def create_hist_m2sum(rdf, hm, rtype='numpy'):

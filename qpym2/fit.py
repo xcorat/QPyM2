@@ -51,9 +51,7 @@ def create_bkgcomps_table(comp_cfgs, mctable, smooth=None):
 
 def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
               comp_cfg=comp_cfg, run_parallel=True, unblinded=True):    # Create configuration for components, 
-    debug('comp_cfg', comp_cfg)
     fit_comps = create_bkgcomps_table(comp_cfg, mctable, smooth=smooth)
-    debug('comp_cfg1', fit_comps)
     sig_hist = signal_df['mchist'][0]
     if smooth:
         sig_hist = hist_tools.smooth_nph2(sig_hist, smooth=smooth)
@@ -89,10 +87,8 @@ def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
     fit_comps['prior'] = priors
 
     _, xedges, yedges = hist_tools.get_empty_hist(hm, return_numpy=True)
-    data_binx, data_biny = np.digitize(data.T[0], bins=xedges) , np.digitize(data.T[1], bins=yedges)
 
     #TODO: add boundary checking and see why there are over/underflow bins
-    bpt = np.array([[comp[bx-1][by-1] for bx,by in zip(data_binx, data_biny) if (bx < comp.shape[0] and by < comp.shape[1] )] for comp in fit_comps['pdf_hist']])
     # bpt = np.array([[comp[by-1][bx-1] for bx,by in zip(data_binx, data_biny) if (bx < 171 and by < 1871 )] for comp in fit_comps['pdf_hist']])
 
     f130 = 0.34167 # TODO: From internal note 123D (convert to nusance param?)
@@ -104,18 +100,19 @@ def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
     var_0v = None
 
     import pytensor.tensor as tt
-    def _logp_test(point, norms):
+    def _logp_test(fik, norms):
         """ Test logp function """
-        l_nev = sum(norms)
-        l_exp_per_ev = tt.dot(norms, point)
-        l_ex = tt.sum(tt.log( l_exp_per_ev + 1e-10) )
-        l_i = -1*l_nev + l_ex
-        return l_i
+        lambda_ = sum(norms)
+        ext_prob = tt.dot(norms, fik)
+        ext_logp = tt.sum(tt.log( ext_prob + 1e-10) )
+        return ext_logp - lambda_
     
     def _random_test(norms):
         """ Test random function """
         return 0
-        
+    
+    data_binx, data_biny = np.digitize(data.T[0], bins=xedges) , np.digitize(data.T[1], bins=yedges)
+    fik = np.array([[comp[bx-1][by-1] for bx,by in zip(data_binx, data_biny)] for comp in fit_comps['pdf_hist']])
 
     with pm.Model() as m2:
         norms = [] # the RVs for norms
@@ -139,7 +136,9 @@ def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
             comp_varnames.append(varname)
 
         fit_comps['varname'] = comp_varnames
-        evl = pm.CustomDist('evl', norms, logp=_logp_test, random=_random_test, observed=bpt)
+        # evl = pm.CustomDist('evl', norms, logp=_logp_interpolate, random=_random_test, observed={'u': data.T[0], 'v': data.T[1]})
+        # pmd = pm.Data('pmd', data)
+        evl = pm.CustomDist('evl', norms, logp=_logp_test, random=_random_test, observed=fik)
 
 
         # debug(norms, bpt)

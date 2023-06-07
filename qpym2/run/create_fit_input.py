@@ -1,10 +1,15 @@
 """ Create fit input related files.
 
+TODO: we shouldn't need to add the qpym2 path here if the module is
+installed properly. But for now, we need to add it to the path.
 """
 import os
+import site
 import numpy as np
 import pandas as pd
 
+
+site.addsitedir('/global/homes/x/xcorat/Software//QPyM2/')
 from qpym2.io import bkg_model, staging, hdf
 from qpym2.utils import debug
 
@@ -38,6 +43,7 @@ def create_fit_input(cfg, write=True):
     Args:
         cfg (dict): configuration dictionary that holds all the configuration settings.
 
+    TODO: implement multiprocessing?
     """
     mcfit_table, mkchain = bkg_model.read_jagsh5(cfg.jags_fpath)
     staging_dir = cfg.staging_config['outpath']
@@ -71,7 +77,7 @@ def create_fit_input(cfg, write=True):
     ndbd_name = 'ndbd'
     defs_ndbd = defs0
     ndbd_hist, _, __ = staging.read_hist(ndbd_mcpath, cfg.hm, treename, defs_ndbd, filters_ndbd, rtype='numpy')
-    debug(f"ndbd hist: {ndbd_hist}")
+    
     signal_df = pd.DataFrame({
         'mean': 0,
         'std': 0,

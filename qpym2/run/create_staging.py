@@ -15,6 +15,8 @@ from qpym2.io import bkg_model
 from qpym2.io import staging
 from qpym2.cfg.common_vars import cfg_m2nat21_may23 as cfg
 
+_NDBD_STAGING_NAME = 'ndbd'
+
 def create_staging(cfg):
     """ Create the staging files. 
         
@@ -106,22 +108,22 @@ def create_staging_all_mp(cfg, multiproc=True, ncores=None):
 
     table, _ = bkg_model.read_jagsh5(cfg.jags_fpath)
     read_config = cfg.ares_config
-    read_config_0v = cfg.ares_config_0v
+    read_config_ndbd = cfg.ares_config_0v
     read_config_data = cfg.data_config
     
     mcpath = read_config['inpath']
-    out_fname_0v = cfg.staging_config['outpath'] + '/0vbb.root'
-    fname_0v = read_config_0v['fname']
+    out_fname_ndbd = f'{cfg.staging_config["outpath"]}/{_NDBD_STAGING_NAME}.root'
+    fname_ndbd = read_config_ndbd['fname']
 
     fname_data = read_config_data['fname']
 
     cuts_mc = [cfg.staging_cuts]
-    cuts_0v = [cfg.staging_cuts]
+    cuts_ndbd = [cfg.staging_cuts]
     cuts_data = [cfg.staging_cuts]
     if 'extra_cuts' in read_config:
         cuts_mc = [cfg.staging_cuts, read_config['extra_cuts']]
-    if 'extra_cuts' in read_config_0v:
-        cuts_0v = [cfg.staging_cuts, read_config_0v['extra_cuts']]
+    if 'extra_cuts' in read_config_ndbd:
+        cuts_ndbd = [cfg.staging_cuts, read_config_ndbd['extra_cuts']]
     if 'extra_cuts' in read_config_data:
         cuts_data = [cfg.staging_cuts, read_config_data['extra_cuts']]
 
@@ -132,11 +134,11 @@ def create_staging_all_mp(cfg, multiproc=True, ncores=None):
                                       write_config=cfg.staging_config, 
                                       filters=cuts_mc)
     # NOTE: we need to pass these as kwargs for the partial to work
-    _create_rdf_0v = _create_rdf_partial(mcpath=read_config_0v['inpath'],
-                                        read_config=read_config_0v,
+    _create_rdf_0v = _create_rdf_partial(mcpath=read_config_ndbd['inpath'],
+                                        read_config=read_config_ndbd,
                                         write_config=cfg.staging_config,
-                                        filters=cuts_0v,
-                                        out_fname=out_fname_0v)
+                                        filters=cuts_ndbd,
+                                        out_fname=out_fname_ndbd)
     _create_rdf_data = _create_rdf_partial(mcpath=read_config_data['inpath'],
                                         read_config=read_config_data,
                                         write_config=cfg.staging_config, 
@@ -150,13 +152,13 @@ def create_staging_all_mp(cfg, multiproc=True, ncores=None):
         with Pool() as pool:
             # TODO: use an async method instead of map.
             ret_data = pool.map(_create_rdf_data, [fname_data])
-            ret_0v = pool.map(_create_rdf_0v, [fname_0v])
+            ret_0v = pool.map(_create_rdf_0v, [fname_ndbd])
             ret_mc = pool.map(_create_rdf, table.fname)
         debug('end pool...', len(ret_mc)+len(ret_0v)+len(ret_data))
     else:
         debug('creating staging files without parallelization...')
         ret_mc = [_create_rdf(fname) for fname in table.fname]
-        ret_0v = [_create_rdf_0v(fname_0v)]
+        ret_0v = [_create_rdf_0v(fname_ndbd)]
         ret_data = [_create_rdf_data(fname_data)]
 
 def create_staging_0v(cfg):
