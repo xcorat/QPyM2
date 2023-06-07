@@ -9,6 +9,7 @@ scripts/
 tests/
 # repo specific folders
 data
+dist/
 
 # add all .gitignore files TODO:
 # !**/.gitignore
