@@ -12,8 +12,8 @@ comp_cfg = [{ 'name': 'co60', 'filter_regex': '60Co'},
             { 'name': 'th232', 'filter_regex': '232Th|208Pb'},
             { 'name': 'others', 'filter_regex_inverse': '60Co|238U|210Pb|232Th|208Pb'}]
 
-def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
-              comp_cfg=comp_cfg, single_core=False, eff_blinding=0):    # Create configuration for components,
+def setup_fit(mctable, data,  signal_df, hm, smooth=None,
+              comp_cfg=comp_cfg,  eff_blinding=0):    # Create configuration for components,
     #efficiency_blinding = 175.0/2574857. 
 
     comps = m2.get_comps(mctable, signal_df, comp_cfg, smooth=smooth)
@@ -31,6 +31,10 @@ def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
 
     model = m2.m2_model(comps, fik, eff_blinding, smooth)
 
+    return model, comps
+
+def run_fit(model, single_core=False):
+
     with model:
         if single_core:
             trace = pm.sample(5000, cores=1, chains=4, tune=1000, return_inferencedata=True, target_accept=0.9)
@@ -38,5 +42,5 @@ def setup_fit(model_name, mctable, data,  signal_df, hm, smooth=None,
             trace = pm.sample(5000, chains=4, tune=1000, return_inferencedata=True, target_accept=0.9)
         az.plot_trace(trace)
         
-    return m2, trace, comps
+    return trace
 
