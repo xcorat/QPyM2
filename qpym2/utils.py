@@ -9,7 +9,19 @@ TODO: Move things into appropriate modules.
 _DEBUG_ = 5
 
 def log(level:int, *args, **kwargs):
-    """ log output (print) if log `level` is less than the `_DEBUG_` level """ 
+    """ log output (print) if log `level` is less than the `_DEBUG_` level 
+    
+    level < 0 is skipped. Use this for specific debugging while keeping print statements
+
+    Parameters
+    ----------
+    level : int
+        The log level.
+    *args and **kwargs : passed to print
+    """ 
+    if level < 0:
+        # negative levels are skipped.
+        return
     if _DEBUG_ >= level:
         print(*args, **kwargs)
 

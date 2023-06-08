@@ -114,7 +114,7 @@ def get_empty_hist(hm, return_numpy=True):
     return hist
 
 def smooth_nph2(h2, smooth=(1, 'k5b')):
-    log(5, f'smoothing...: {smooth}')
+    log(-5, f'smoothing...: {smooth}')
     nx, ny = h2.shape
     h2root = TH2D('_QCOMP_h2root', '', nx, 0, nx, ny, 0, ny)
     for i in range(nx):
