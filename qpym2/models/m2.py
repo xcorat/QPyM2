@@ -118,7 +118,7 @@ def make_bkgcomps_table(comp_cfgs, mctable, smooth=None):
     table.set_index('name', inplace=True)
     return table[['prior', 'integral', 'pdf_hist']]
 
-def get_comps(mctable, signal_df, comp_cfg, smooth=None):
+def get_comps(mctable, signal_df, comp_cfg, smooth=None, eff_blinding=0, ntotal=0):
     """ Create the components as a pandas.DataFrame by merging the mctable and signal.
      
     TODO:
@@ -133,7 +133,17 @@ def get_comps(mctable, signal_df, comp_cfg, smooth=None):
     # signal_df[ 'integral' ] = DATA_0v_INJECTED*signal_df[ 'integral' ]/MC_0v_NEV
     # NOTE: :above:, I have no idea. :below: DF.append was removed in pandas 2.0
     # return fit_comps.append(signal_df[[ 'integral', 'pdf_hist']])
-    return pd.concat([fit_comps, signal_df], join='inner')  
+    comps = pd.concat([fit_comps, signal_df], join='inner')  
+    prior_vals = comps['integral'].copy()
+    # expected mean value for the signal must be set to 0 for unblinded data,
+    # or to the expected number of events for blinded data
+    prior_vals['ndbd'] = eff_blinding*signal_df['integral']['ndbd']
+    priors = m2.priors(prior_vals, ['normal']*4 + ['flat'], ntotal=ntotal, nsigma=5)
+
+    comps['prior'] = priors
+    comps['varname'] = comps.index
+     
+    return comps
 
 def make_fik(comps, data, xedges, yedges):
     """ Create the extended likelihood matrix for each event i, in each component k. 
@@ -182,7 +192,6 @@ def m2_model(comps, fik, eff_blinding=0, smooth=None):
     with pm.Model() as m2:
 
         def _get_param(prior, name):
-            debug(prior, name)
             if prior[0] == 'halfnormal':
                 _BoundedNormal = pm.Bound(pm.Normal, lower=0.0)
                 return _BoundedNormal(name, mu=prior[1]['mu'], sigma=prior[1]['sigma'])

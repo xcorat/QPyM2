@@ -18,14 +18,6 @@ def setup_fit(mctable, data,  signal_df, hm, smooth=None,
 
     comps = m2.get_comps(mctable, signal_df, comp_cfg, smooth=smooth)
 
-    prior_vals = comps['integral'].copy()
-    # expected mean value for the signal must be set to 0 for unblinded data,
-    # or to the expected number of events for blinded data
-    prior_vals['ndbd'] = eff_blinding*signal_df['integral']['ndbd']
-    priors = m2.priors(prior_vals, ['normal']*4 + ['flat'], ntotal=len(data), nsigma=5)
-
-    comps['prior'] = priors
-
     _, xe, ye = hist_tools.get_empty_hist(hm, return_numpy=True)
     fik = m2.make_fik(comps, data, xe, ye)
 

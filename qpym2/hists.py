@@ -260,3 +260,34 @@ def get_hist_from_rdf(rdf, hm, rtype='numpy'):
         return create_hist_h2uv(rdf, hm, rtype)
     else:
         raise TypeError("invalid hist_type in hm.")
+
+def sample_hist(hist, xedges, yedges):
+    """ Sample a histogram according to the bin contents. 
+    The total number of events is Poisson smeared.
+
+    Args:
+        hist (numpy.ndarray): 2D histogram
+        xedges (numpy.ndarray): bin edges in x
+        yedges (numpy.ndarray): bin edges in y
+
+    Returns:
+        numpy.ndarray: array of sampled points
+    """
+    # Compute bin centers
+    xcenters = (xedges[:-1] + xedges[1:]) / 2
+    ycenters = (yedges[:-1] + yedges[1:]) / 2
+    
+    # Flatten histogram into a 1D array and use numpy.random.choice to sample
+    flat_hist = hist.flatten()
+    
+    
+    sample_nevs = np.random.poisson(hist.sum())
+    samples = np.random.choice(np.arange(len(flat_hist)), size=sample_nevs, p=flat_hist/hist.sum())
+    
+    sample_bins = np.unravel_index(samples, shape=hist.shape)
+
+    # Get the bin centers corresponding to the sampled bins
+    sample_x = xcenters[sample_bins[0]]
+    sample_y = ycenters[sample_bins[1]]
+    
+    return np.array([sample_x, sample_y]).T
