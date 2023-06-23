@@ -66,8 +66,9 @@ def priors(comps, pars='normal', ntotal=0, nsigma=_WIDTH_NSIGMA):
                 if p == 'normal': outpars.append((p, {'mu': val, 'sigma': sigma}))
                 elif p == 'halfnormal': outpars.append((p, {'mu': val, 'sigma': sigma}))
                 elif p == 'flat':
-                    min = np.max([0, val-sigma])
-                    max = np.min([ntotal, val+sigma])
+                    # TODO: maybe it is better to have a flat prior from 0 to ntotal
+                    min = 0 #np.max([0, val-sigma])
+                    max = ntotal #np.min([ntotal, val+sigma])
                     outpars.append((p, {'lower': min, 'upper': max}))
                 else:
                     raise ValueError(f'Unsupported prior type {p}')
@@ -122,6 +123,9 @@ def get_comps(mctable, signal_df, comp_cfg, smooth=None, eff_blinding=0, ntotal=
     """ Create the components as a pandas.DataFrame by merging the mctable and signal.
      
     TODO:
+        - Reading the mctable and adding the signal to the comps table
+             may need to be separated into two functions to make it easier
+             to work with blinded/injected data.
     """
     fit_comps = make_bkgcomps_table(comp_cfg, mctable, smooth=smooth)
     sig_hist = signal_df['mchist'][0]
@@ -138,11 +142,11 @@ def get_comps(mctable, signal_df, comp_cfg, smooth=None, eff_blinding=0, ntotal=
     # expected mean value for the signal must be set to 0 for unblinded data,
     # or to the expected number of events for blinded data
     prior_vals['ndbd'] = eff_blinding*signal_df['integral']['ndbd']
-    priors = m2.priors(prior_vals, ['normal']*4 + ['flat'], ntotal=ntotal, nsigma=5)
+    
+    prs = priors(prior_vals, ['normal']*4 + ['flat'], ntotal=ntotal, nsigma=5)
+    comps['prior'] = prs
 
-    comps['prior'] = priors
-    comps['varname'] = comps.index
-     
+    comps['varname'] = comps.index     
     return comps
 
 def make_fik(comps, data, xedges, yedges):
@@ -154,19 +158,16 @@ def make_fik(comps, data, xedges, yedges):
     fik = [[comp_hist[bx-1][by-1] for bx,by in zip(data_binx, data_biny)] for comp_hist in comps['pdf_hist']]
     return np.array(fik)
 
-def m2_model(comps, fik, eff_blinding=0, smooth=None):
-    """ Create and return a pymc3 model for the M2 fit.
+def m2_model(comps, fik):
+    """ Create and return a pymc model for the M2 fit.
 
     Parameters
     ----------
     comps : pandas.DataFrame
-        The components table.
+        The components table with `name` and `prior` columns. The `prior` column
+        must be a list of tuples with the prior type and parameters.
     fik : np.ndarray (n_events, n_components)
         The extended likelihood matrix for each event i, in each component k.
-    eff_blinding : float
-        The blinding efficiency (n_injected/n_mc) to use for the signal component.
-    smooth : (int, )
-        The smoothing factor to use for the components.
 
     Returns
     -------
@@ -201,13 +202,63 @@ def m2_model(comps, fik, eff_blinding=0, smooth=None):
                 return pm.Normal(name, mu=prior[1]['mu'], sigma=prior[1]['sigma'])
             else:
                 raise ValueError(f'Unsupported prior type {prior[1]["type"]}')
+            
+        priors = comps['prior']
+        names = comps.index
         
-        ck = [_get_param(comp['prior'], name) for name, comp in comps.iterrows()]
+        ck = [_get_param(prior, name) for name, prior in zip(names, priors)]
         # This calls the likelihood function for the observable. The Observed variable here (fik)
         # is the not a list of events, but the list of probabilities (per component) for events.
         ev_probs = pm.CustomDist('pik', ck, logp=_logp, random=_random, observed=fik)
 
         return m2
 
+def m2_binned(comps, fik):
+    """ Create and return a pymc model (binned likelihood) for the M2 fit.
+
+    TODO: this implementation doesn't seem to work. 
+    """
+
+    raise NotImplementedError('m2_binned is not implemented yet.')
+
+    import pytensor.tensor as tt
+    def _logp(fik, norms):
+        """ Extended log likelihood function for fitting the components to the data. """
+        lambda_ = sum(norms)
+        ext_prob = tt.dot(norms, fik)
+        ext_logp = tt.sum(tt.log( ext_prob + 1e-10) )
+        return ext_logp - lambda_
     
+    def _random(norms):
+        """ TODO: Not implemented """
+        raise NotImplementedError()
+
+    with pm.Model() as m2:
+
+        m2priors = comps['prior']
+        names = comps.index
+        hists = np.array([comps['pdf_hist'][name] for name in names])
+
+
+    with pm.Model() as m2:
+
+        def _get_param(prior, name):
+            if prior[0] == 'halfnormal':
+                _BoundedNormal = pm.Bound(pm.Normal, lower=0.0)
+                return _BoundedNormal(name, mu=prior[1]['mu'], sigma=prior[1]['sigma'])
+            elif prior[0] == 'flat':
+                return pm.Uniform(name, lower=prior[1]['lower'], upper=prior[1]['upper'])
+            elif prior[0] == 'normal':
+                return pm.Normal(name, mu=prior[1]['mu'], sigma=prior[1]['sigma'])
+            else:
+                raise ValueError(f'Unsupported prior type {prior[1]["type"]}')
+
+        
+        ck = [_get_param(prior, name) for name, prior in zip(names, m2priors)]
+
+        # data_var = pm.Data('data', h2)
+        # mu = np.array([c*hist for c, hist in zip(ck, hists)])
+        mu = pm.math.dot(hists.T, ck).T
+        obs = pm.Poisson('obs', mu=mu, observed=h2)
+        return m2
     
