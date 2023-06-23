@@ -77,19 +77,62 @@ def get_ncores(print_state=False):
 from scipy.stats import gaussian_kde
 from scipy.optimize import minimize_scalar
 import numpy as np
-def get_mode(arr):
-    """ Get the mode of the array `arr` using a gaussian kernel density estimation. """
+def get_mode(arr, bw_method=None):
+    """ Get the mode of the array `arr` using a gaussian kernel density estimation. 
+    
+    Parameters
+    ----------
+    arr : array-like
+        The array to find the mode of.
+    bw_method : str, scalar or callable, optional
+        The method used to calculate the estimator bandwidth. This can be 'scott', 'silverman',
+        a scalar constant or a callable. See `scipy.stats.gaussian_kde` for more details. 
+        If None, the bandwidth is estimated using the scott's rule of thumb.
+            `bw` = `n`**(-1./(arr.ndim+4))
+    """
     # TODO: error checking and performance!!
     arr = np.array(arr)
     mean = arr.mean()
     marr = arr/mean - 1
-    kde = gaussian_kde(marr, bw_method=1.0)
+
+    if not bw_method:
+        bw_method = marr.size**(-1./(marr.ndim+4))
+    kde = gaussian_kde(marr, bw_method=bw_method)
     xmax = minimize_scalar( lambda x: -kde.evaluate(x), bounds=(marr.min(), marr.max()), method='bounded').x.item()
 
     # TODO: check with other methods
     # print(mean, (xmax + 1)*mean)
     return (xmax + 1)*mean
 
-def find_mode(varnames, trace):
+def find_mode(trace, varnames=None):
     """ Find the mode of the variables in `varnames` from the `trace` object. """
+    if varnames is None:
+        varnames = trace.posterior.data_vars
     return [ get_mode(trace.posterior[varname].values.flatten()) for varname in varnames ]
+
+def test_mode(arr, ax, **kwargs):
+    """ Test the mode finding method. """
+    
+    import matplotlib.pyplot as plt
+    from scipy.stats import gaussian_kde
+    from scipy.optimize import minimize_scalar
+    
+    mode = get_mode(arr)
+    arr = np.array(arr)
+    mean = arr.mean()
+    marr = arr#/mean - 1
+
+    bw_method = marr.size**(-1./(marr.ndim+4))
+    kwa_ = dict(bw_method=bw_method)
+    kwa_.update(kwargs)
+    
+    kde = gaussian_kde(marr, **kwa_)
+    xmax = minimize_scalar( lambda x: -kde.evaluate(x), bounds=(marr.min(), marr.max()), method='bounded').x.item()
+
+    ax.hist(marr, bins=50, density=True)
+    ax.axvline(x=xmax, color='red')
+
+    ls = np.linspace(marr.min(), marr.max(), 100)
+    ax.plot(ls, kde.evaluate(ls))
+
+    return ax
