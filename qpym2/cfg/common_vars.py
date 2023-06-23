@@ -131,7 +131,7 @@ fit_cuts_ndbd = {
 }
 
 shift_types = [ 'ushiftp' ]
-shifts = [0, 0.3, 0.5, 1, 1.5]
+shifts = [0, 0.3, 0.5, 0.8, 1, 1.2, 1.5]
 
 fit_cuts_common = f'{ecuts}&&{fit_cuts_co["_v150"]}&&{fit_cuts_co["_cosum_10"]}'
 
@@ -286,6 +286,7 @@ fit_pars = TempConfig(
 #     'ushiftp1': { 'fname_postfix' : 'ushiftp1',  'shift': 1,  'transform': ( '(esum + 0.001 *e1)/sqrt(2)', '(2*e1 + 0.001*e1 - esum)/sqrt(2)') },
 #     'ushiftp15': { 'fname_postfix' : 'ushiftp15', 'shift': 1.5, 'transform': ( '(esum + 0.0015*e1)/sqrt(2)', '(2*e1 + 0.0015*e1 - esum)/sqrt(2)') },
 # }
+
 cfg_m2nat21_may23 = TempConfig(
     ares_config = read_config,
     ares_config_0v = read_config_0v,
@@ -297,6 +298,26 @@ cfg_m2nat21_may23 = TempConfig(
     jags_fpath = f'{datapath}/BM_Nature2021/out_jags/Out.h5',
     hm = hm,
     fit_pars = fit_pars,
+    # --
+    # run_configs = run_configs,
+    # shifts = shifts,
+    # smooth = smooth
+)
+
+cfg_m2nat21_may23_syst = TempConfig(
+    ares_config = read_config,
+    ares_config_0v = read_config_0v,
+    data_config = read_config_data,
+    staging_cuts = cuts,
+    outdir =  fitdir,
+    datapath = datapath,
+    staging_config = staging_config,
+    jags_fpath = f'{datapath}/BM_Nature2021/out_jags/Out.h5',
+    hm = hm,
+    fit_pars = fit_pars,
+    syst_pars = {
+        'shifts': shifts,
+    }
     # --
     # run_configs = run_configs,
     # shifts = shifts,
