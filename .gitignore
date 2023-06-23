@@ -10,6 +10,7 @@ tests/
 # repo specific folders
 data
 dist/
+output/
 
 # add all .gitignore files TODO:
 # !**/.gitignore
