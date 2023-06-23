@@ -167,6 +167,25 @@ def fit_m2(data, comps, xe, ye, single_core=False):
             whether to use multiprocessing when sampling with pymc. Default is False.
     """
     from qpym2.models import m2
+
+    # TODO: this parameter is a setting of the fit, so must be stored and 
+    #       passed to this fit function.
+    _WIDTH_NSIGMA = m2._WIDTH_NSIGMA
+
+    # We first need to update the priors to match the number of events in the data
+    def _update_prior_sigma(prior, ntotal, nsigma=_WIDTH_NSIGMA):
+        # tuples cannot be modified, so we need to make a copy
+        sigma = nsigma*np.sqrt(ntotal)
+        if prior[0] == 'halfnormal' or prior[0] == 'normal':
+            _prior = (prior[0], { 'mu': prior[1]['mu'], 'sigma': sigma })
+        elif prior[0] == 'flat':
+            _prior = ('flat', {'lower': 0, 'upper': ntotal})
+        else:
+            raise ValueError(f'Unknown prior type: {prior[0]}')
+        return _prior
+    
+    comps['prior'] = comps.apply(lambda comp: _update_prior_sigma(comp['prior'], len(data)), axis=1)
+
     fik = m2.make_fik(comps, data, xe, ye)
     model = m2.m2_model(comps, fik)
 
