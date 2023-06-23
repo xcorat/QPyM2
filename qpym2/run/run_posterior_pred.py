@@ -80,11 +80,22 @@ def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
         bias_max: float
             maximum bias to test. If not given, use the 2x the value from the fit.
 
+    Returns:
+        m2fit_traces: list
+            list of traces from the posterior sampling.
+        signal_norms: list
+            list of signal norms used for each posterior sampling.
+
+    TODO: 
+        - Store traces in a native format that doesn't use json-stringify.
+            we need this to get rid of the crashing when # runs is too large (>500, 500->1.4GB)
+
     """
     import time
     from qpym2 import hists as hist_utils
     from qpym2 import utils
     from qpym2 import posterior_predictive as pp
+    from qpym2.models import m2
     
     _n = nsamples_per_test
 
@@ -99,13 +110,13 @@ def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
                              signal_comp=signal_comp, bias_min=bias_min, bias_max=bias_max)
     signal_norms = points[:, vars.index(signal_comp)]
     fit_comps = comps[ ['pdf_hist', 'prior', 'integral'] ]
-
     # Sample data from the points setup.
-    # NOTE: maybe check the time taken for this...
     toy_data = [ pp.sample_data(fit_comps, point, (xedges, yedges))[0] for point in points ]
-    utils.debug([s.shape for s in toy_data])
+
+    # fit_comps['prior'] = m2.piors(, pars=['normal']*4+['flat'], ntotal=0, nsigma=5)
+    # NOTE: maybe check the time taken for this...
     # toy_data = np.array(toy_data)
-    sens_pars = [ [data, fit_comps, xedges, yedges] for data in toy_data ]
+    sens_pars = [ [data, comps, xedges, yedges] for data in toy_data ]
     ncores = utils.get_ncores()
     with Pool(ncores) as p:
         print('start pool...\nncores = ', len(sens_pars))
@@ -138,7 +149,7 @@ def run_single_call(cfg):
     fname = f'fit_{cfg.fit_pars.name}'
     fullname = f'{outdir}/{fname}'
     comps, trace = fit_io.read_fit(fullname=fullname)
-    traces, signal_norms = run_sample_post(comps, trace, cfg.hm, nsamples_per_test=100, signal_comp='ndbd',
+    traces, signal_norms = run_sample_post(comps, trace, cfg.hm, nsamples_per_test=500, signal_comp='ndbd',
                             bias_min=0, bias_max=200)
     
     

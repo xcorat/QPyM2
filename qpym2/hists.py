@@ -58,7 +58,6 @@ def get_hist_settings(hm):
     TODO: clean w/ copilot
     """
     ht = hm.hist_type.value
-    debug(ht, HistType.m2sum.value)
     if ht == HistType.m2sum.value:
         nbins = math.ceil((hm.esum_max - hm.esum_min)/hm.binsize)
         range = [hm.esum_min, hm.esum_max]
