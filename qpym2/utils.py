@@ -93,7 +93,7 @@ def get_mode(arr, bw_method=None):
     # TODO: error checking and performance!!
     arr = np.array(arr)
     mean = arr.mean()
-    marr = arr/mean - 1
+    marr = arr#/mean - 1
 
     if not bw_method:
         bw_method = marr.size**(-1./(marr.ndim+4))
@@ -102,7 +102,7 @@ def get_mode(arr, bw_method=None):
 
     # TODO: check with other methods
     # print(mean, (xmax + 1)*mean)
-    return (xmax + 1)*mean
+    return xmax #(xmax + 1)*mean
 
 def find_mode(trace, varnames=None):
     """ Find the mode of the variables in `varnames` from the `trace` object. """

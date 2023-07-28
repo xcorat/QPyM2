@@ -42,6 +42,8 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
         'ch1': 'Channel',
         'ch2': 'Multiplet[1]',
         'add_friends': [], # list of (fname, treename) of friend trees to be added
+        'ds': 'Dataset',
+        't': 'Time'
     }
     _FILTERS_DEFAULT = ['Multiplicity==2']
     _WRITE_CONFIG_DEFAULT = {
@@ -55,7 +57,9 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
     defs = [('e1', read_config['evar']),
             ('esum', read_config['esum_var']),
             ('ch1', read_config['ch1']),
-            ('ch2', read_config['ch2'])]
+            ('ch2', read_config['ch2']),
+            ('ds', read_config['ds']),
+            ('t', read_config['t']),]
     # using u0, v0 as aliases for the unchanged u,v variables.
     defs.append(('u0', f'{read_config["esum_var"]}/sqrt(2)'))
     defs.append(('v0', f'(2*{read_config["evar"]} - {read_config["esum_var"]})/sqrt(2)'))
@@ -63,7 +67,7 @@ def create_rdf_m2mc(fname, mcpath, out_fname='', read_config={}, write_config={}
     input_add_friends = read_config.get('add_friends', None)
 
     filters = _FILTERS_DEFAULT + filters
-    write_config = {**_WRITE_CONFIG_DEFAULT, **write_config} # merge the two dicts with write_config overriding the default
+    write_config = {**_WRITE_CONFIG_DEFAULT, **write_config} 
     if out_fname == '':
         out_fname = f'{write_config["outpath"]}/{fname}'
     
@@ -91,6 +95,13 @@ def read_hist(fpath, hm, treename='uvtree', defs=[], filters=[], rtype='numpy'):
     """
     from ROOT import RDataFrame as RDF
 
+    # print(len(defs))
+    # for def_ in defs:
+    #     print(def_)
+    #     print(len(def_))
+    #     # for d in def_:
+    #     #     print(d)
+    # return None
     debug('reading :', fpath)
     rdf = RDF(treename, fpath)
 
@@ -98,10 +109,11 @@ def read_hist(fpath, hm, treename='uvtree', defs=[], filters=[], rtype='numpy'):
         log(2, 'empty rdf: ', fpath)
         return hists.get_empty_hist(hm)
 
-    for alias, def_ in defs:
-        debug('defining: ', alias, def_)
-        rdf = rdf.Define(alias, def_)
+    for def_ in defs:
+        debug('defining: ', def_[0])
+        rdf = rdf.Define(def_[0], def_[1])
 
+    # add secondary values
     rdf = rdf.Define('e1', '(u+v)/sqrt(2)')\
         .Define('e2', '(u-v)/sqrt(2)')\
         .Define('esum', 'u*sqrt(2)')\

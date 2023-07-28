@@ -150,26 +150,12 @@ fit_pars = TempConfig(
     name = 'noco2_no0v1740_v150_smooth',
     fit_dir = fitdir,
     cuts = fit_cuts,
+    lss = True,
     shift = TempConfig(type=shift_types[0], val=shifts[2], filter_str='co60')
 )
-    
-cfg_m2nat21_may23 = TempConfig(
-    ares_config = read_config,
-    ares_config_0v = read_config_0v,
-    data_config = read_config_data,
-    staging_cuts = cuts,
-    outdir =  fitdir,
-    datapath = datapath,
-    staging_config = staging_config,
-    jags_fpath = f'{datapath}/BM_Nature2021/out_jags/Out.h5',
-    hm = hm,
-    fit_pars = fit_pars,
-    # --
-    # run_configs = run_configs,
-    # shifts = shifts,
-    # smooth = smooth
-)
 
+lspars_config = TempConfig(test=True)
+    
 cfg_m2nat21_may23_syst = TempConfig(
     ares_config = read_config,
     ares_config_0v = read_config_0v,
@@ -183,21 +169,7 @@ cfg_m2nat21_may23_syst = TempConfig(
     fit_pars = fit_pars,
     syst_pars = {
         'shifts': shifts,
-    }
-    # --
-    # run_configs = run_configs,
-    # shifts = shifts,
-    # smooth = smooth
+        # 'lss': None,
+    },
+    lspars_config = lspars_config,
 )
-
-
-# global_vars_noroi = TempConfig(
-#     outdir =  fitdir,
-#     datapath = datapath,
-#     staging_config = staging_config,
-#     jags_fpath = '/global/cfs/projectdirs/cuore/syncData/CUORE/simulation/Nature2021/out_jags/Out.h5',
-#     run_configs = run_configs_noroi,
-#     shifts = shifts,
-#     hm = hm_noroi,
-#     smooth = smooth
-# )

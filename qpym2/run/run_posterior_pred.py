@@ -63,7 +63,7 @@ def setup_toy_draws(trace, nsamples_per_test=1, vars=None, signal_comp='ndbd',
     return np.concatenate((points_sens, points_bias), axis=0)
     
 def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
-                        bias_min=0, bias_max=None):
+                        bias_min=0, bias_max=None, fout=None):
     """ Run posterior sampling for bias and sensitivity studies.
     
     Args:
@@ -79,6 +79,8 @@ def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
             minimum bias to test. Default is 0.
         bias_max: float
             maximum bias to test. If not given, use the 2x the value from the fit.
+        fout: str TODO: NOT IMPLEMENTED
+            full path to the output file. No output file is written if not given.
 
     Returns:
         m2fit_traces: list
@@ -122,7 +124,7 @@ def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
         print('start pool...\nncores = ', len(sens_pars))
         m2fit_traces = p.map(pp.fit_m2_formp, sens_pars)
 
-        timeout = 60*30 # 30 minutes
+        timeout = 60*80 # 30 minutes
         start = time.time()
         while time.time()-start < timeout:
             if p._taskqueue.empty():
@@ -135,6 +137,11 @@ def run_sample_post(comps, trace, hm, nsamples_per_test=1, signal_comp='ndbd',
             # raise RuntimeError('Timeout in run_sample_post')
             print('Timeout in run_sample_post')
             p.close()
+        
+    if fout:
+        raise NotImplementedError('Writing to file is not implemented yet.')
+        # with open(fout, 'w') as f:
+        #     json.dump(m2fit_traces, f)
 
     print('end pool...', len(m2fit_traces))
 
@@ -159,6 +166,43 @@ def run_single_call(cfg):
     
     print(signal_norms)
 
+def _run_toys(fname,  name, comps, trace, nsamples=1):
+    traces, signal_norms = run_sample_post(comps, trace, cfg.hm, nsamples_per_test=nsamples, signal_comp='ndbd',
+                        bias_min=0, bias_max=200)
+    with pd.HDFStore(fname) as store:
+        store[f'{name}'] = pd.DataFrame({'trace': traces, 'signal_norm': signal_norms})
+    return None #traces, signal_norms
+    
+def run_multishift(fitname, cfg, nsamples=1):
+    """ Run posterior sampling for different shifts as set in configuration settings
+    
+    """
+    from qpym2.io import fit as fit_io
+    fpars = cfg.fit_pars
+    shifts = cfg.syst_pars['shifts']
+    shift_names = [f'{fpars.shift.type}{s*10:02.0f}' for s in shifts]
+    outdir = f'{fpars.fit_dir}/{fitname}'
+
+    # fnames = [f'{fpars.fit_dir}/input_{fpars.name}_{sname}.h5' for sname in shift_names]
+
+    read = [fit_io.read_fit(outdir, fname=n) for n in shift_names]
+    read_df = pd.DataFrame({'shift_name': shift_names, #'fname': fnames,
+                            'idata': [f[1] for f in read],
+                            'comps': [f[0] for f in read],
+                            'data': [f[2] for f in read]})
+    
+    for name in shift_names:
+        if name in ['ushiftp00', 'ushiftp03', 'ushiftp05', 'ushiftp08', 'ushiftp10', 'ushiftp12']:
+            continue
+        fname = f'{outdir}/toys_{name}.h5'
+        fdf = read_df[read_df['shift_name'] == name].iloc[0]
+        _run_toys(fname, fdf['shift_name'], fdf['comps'], fdf['idata'], nsamples)
+
+
+    # ret = fdf.apply(lambda row: _run_toys(fname, row['shift_name'], row['comps'], row['idata'], nsamples), axis=1)
+
+    # Done
+    pass
 
 if __name__ == '__main__':
     import site
@@ -166,10 +210,23 @@ if __name__ == '__main__':
     from multiprocessing import Pool
     
     site.addsitedir('/global/homes/x/xcorat/Software//QPyM2/')
-    site.addsitedir('/global/homes/x/xcorat/Software//QPyM2/cfg/nat21/roi310_main/')
-    from qpym2.cfg.common_vars import cfg_m2nat21_may23 as cfg
+    # site.addsitedir('/global/homes/x/xcorat/Software//QPyM2/cfg/nat21/roi310_main/')
+    # run_single_call(cfg)
 
-    run_single_call(cfg)
+    from qpym2.cfg.common_vars import cfg_m2nat21_may23_syst as cfg
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+
+    _FITNAME = 'm2fit_noco2_no0v1740_v150_smooth'
+    parser.add_argument('--fitname', help='name of the fit to run', default=_FITNAME)
+    parser.add_argument('--nsamples', help='number of samples to draw from the posterior', default=1, type=int)
+
+    args = parser.parse_args()
+    
+    run_multishift(args.fitname, cfg, args.nsamples)
+
+    
+
 
 """ Move below to a new function """
     # run_name, shift_name = sys.argv[1:] #'noco2_no0v1740_v150_smooth', 'ushiftp05'
