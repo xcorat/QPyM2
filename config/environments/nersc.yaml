@@ -13,6 +13,9 @@ infrastructure:
     plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/plots"
     logs_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/logs"
 
+  directories:
+    reduced_data_dir: "/global/homes/x/xcorat/Software/cuore-nersc-modern_v4.0.0/cuoremc/ares/data/Nature2021"
+
   data_files:
     fit_input_pattern: "input.h5"
     fit_result_pattern: "fit.h5"

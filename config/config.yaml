@@ -21,3 +21,8 @@ defaults:
 pipeline:
   name: "qpym2"
   version: "2.0"
+
+# Logging configuration (applied by main() entry points via logging.basicConfig)
+logging:
+  level: DEBUG
+  format: "%(asctime)s %(levelname)-8s %(name)s: %(message)s"

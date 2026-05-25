@@ -16,9 +16,12 @@ job) → run sequentially in-process without spawning a pool.
 
 from __future__ import annotations
 
+import logging
 import os
 from multiprocessing import Pool
 from typing import Any, Callable, Iterable, List, Optional, Tuple
+
+_log = logging.getLogger(__name__)
 
 __all__ = ['run_pool', 'JobPool']
 
@@ -39,7 +42,9 @@ def _run_tasks(tasks: List[Tuple[Callable[..., Any], tuple, dict]],
     if not tasks:
         return []
     n = _resolve_ncores(ncores, len(tasks))
+    _log.debug('pool: %d jobs on %d core(s)', len(tasks), n)
     if n == 1 or len(tasks) == 1:
+        _log.debug('pool: running sequentially (in-process)')
         return [_invoke(t) for t in tasks]
     with Pool(processes=n) as pool:
         # imap_unordered drains as workers complete; results come back in

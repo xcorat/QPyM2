@@ -1,3 +1,4 @@
+import logging
 from logging import debug
 
 from qpym2.io.rdf import read_rdf, write_rdf
@@ -116,6 +117,37 @@ def create_rdf_m2bkg(fname, cfg, out_fname="", extra_filters=None):
 # Batch entry point
 # --------------------------------------------------------------------------- #
 
+def create_rdf_m2data(cfg, out_fname="", extra_filters=None):
+    """Stage the CUORE reduced data file.
+
+    Args:
+        cfg (DictConfig): Hydra config. Input path read from
+            ``cfg.infrastructure.directories.reduced_data_dir`` /
+            ``cfg.infrastructure.data_files.reduced_data``.
+            Output name taken from
+            ``cfg.infrastructure.naming_conventions.data_name``.
+        out_fname (str): Output path override. Defaults to
+            ``cfg.staging.outpath/<data_name>.root``.
+        extra_filters (list of str, optional): Additional filters on top of
+            ``cfg.cuts.base_cuts``.
+    """
+    fname = cfg.infrastructure.data_files.reduced_data
+    data_name = cfg.infrastructure.naming_conventions.data_name
+    if out_fname == '':
+        out_fname = f'{cfg.staging.outpath}/{data_name}.root'
+    _create_rdf_m2mc(
+        fname,
+        mcpath=cfg.infrastructure.directories.reduced_data_dir,
+        **_cfg_kwargs(cfg),
+        out_fname=out_fname,
+        extra_filters=extra_filters,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Batch entry point
+# --------------------------------------------------------------------------- #
+
 def _bkg_fnames(cfg):
     """Background MC filenames, read from the JAGS HDF5 component table."""
     from qpym2.io.bkg_model import read_jagsh5
@@ -140,32 +172,39 @@ def _run_ndbd(fname, cfg):
     create_rdf_m2ndbd(fname, cfg)
 
 
-def build_staging_jobs(cfg, include_bkg=True, include_ndbd=True):
-    """Return ``[(kind, fname), ...]`` covering all bkg + ndbd files."""
+def _run_data(cfg):
+    create_rdf_m2data(cfg)
+
+
+def build_staging_jobs(cfg, include_bkg=True, include_ndbd=True, include_data=True):
+    """Return ``[(kind, fname), ...]`` covering bkg, ndbd, and data files."""
     jobs = []
     if include_bkg:
         jobs += [('bkg', f) for f in _bkg_fnames(cfg)]
     if include_ndbd:
         jobs += [('ndbd', f) for f in _ndbd_fnames(cfg)]
+    if include_data:
+        fname = cfg.infrastructure.data_files.reduced_data
+        jobs += [('data', fname)]
     return jobs
 
 
 def main():
-    """Stage all configured MC files in parallel.
+    """Stage all configured files (bkg MC, ndbd MC, data) in parallel.
 
     Usage::
 
         python -m qpym2.run.create_staging [--environment nersc]
                                            [--analysis m2]
                                            [--ncores N]
-                                           [--ndbd-only | --bkg-only]
+                                           [--ndbd-only | --bkg-only | --data-only]
     """
     import argparse
     from qpym2.cfg.hydra_adapter import get_config
     from qpym2.utils.pool import JobPool
 
     parser = argparse.ArgumentParser(
-        description='Stage all configured MC files (bkg + ndbd).',
+        description='Stage all configured files (bkg MC, ndbd MC, data).',
     )
     parser.add_argument('--environment', '-e', default='nersc')
     parser.add_argument('--analysis', '-a', default='m2')
@@ -174,15 +213,19 @@ def main():
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--ndbd-only', action='store_true')
     group.add_argument('--bkg-only', action='store_true')
+    group.add_argument('--data-only', action='store_true')
     args = parser.parse_args()
 
     cfg = get_config(environment=args.environment, analysis=args.analysis)
+    logging.basicConfig(level=cfg.logging.level, format=cfg.logging.format)
 
     pool = JobPool()
-    if not args.ndbd_only:
+    if not args.ndbd_only and not args.data_only:
         pool.extend(_run_bkg, [(f, cfg) for f in _bkg_fnames(cfg)])
-    if not args.bkg_only:
+    if not args.bkg_only and not args.data_only:
         pool.extend(_run_ndbd, [(f, cfg) for f in _ndbd_fnames(cfg)])
+    if not args.bkg_only and not args.ndbd_only:
+        pool.add(_run_data, cfg)
 
     print(f'[staging] dispatching {len(pool)} jobs on {args.ncores or "all"} cores')
     pool.run(ncores=args.ncores)

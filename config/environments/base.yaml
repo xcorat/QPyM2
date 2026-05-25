@@ -17,6 +17,8 @@ infrastructure:
     ndbd_mc_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/ares/0vbb"
     # Directory with background monte-carlo simulations
     bkg_mc_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/BM_1ton/out_ares"
+    # Directory containing the reduced CUORE data file (reduced_data)
+    reduced_data_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
 
   # Output paths
   output_paths:
