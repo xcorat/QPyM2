@@ -202,6 +202,7 @@ def main():
     import argparse
     from qpym2.cfg.hydra_adapter import get_config
     from qpym2.utils.pool import JobPool
+    from qpym2.utils.logging import setup_logging
 
     parser = argparse.ArgumentParser(
         description='Stage all configured files (bkg MC, ndbd MC, data).',
@@ -217,7 +218,7 @@ def main():
     args = parser.parse_args()
 
     cfg = get_config(environment=args.environment, analysis=args.analysis)
-    logging.basicConfig(level=cfg.logging.level, format=cfg.logging.format)
+    setup_logging(cfg)
 
     pool = JobPool()
     if not args.ndbd_only and not args.data_only:
