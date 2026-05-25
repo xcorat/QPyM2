@@ -1,0 +1,25 @@
+# @package _global_
+infrastructure:
+  output_paths:
+    data_dir: "data"
+    fits_dir: ""
+    logs_dir: ""
+    plots_dir: ""
+
+system:
+  matplotlib_backend: "Agg"
+
+qroot:
+  treename: "outTree"
+  evar: "Energy"
+  esum_var: "TotalEnergy"
+  ch1: "Channel"
+  ch2: "Multiplet[1]"
+  ds: "Dataset"
+  t: "Time"
+  add_friends: []
+
+staging:
+  output_treename: "uvtree"
+  outpath: "output"
+  output_columns: ["u", "v", "ch1", "ch2"]

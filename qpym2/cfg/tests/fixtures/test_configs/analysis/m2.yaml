@@ -1,0 +1,5 @@
+# @package _global_
+models:
+  base:
+    threshold: 0.5
+    binning: 2
