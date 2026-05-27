@@ -2,6 +2,7 @@ import logging
 from logging import debug
 
 from qpym2.io.rdf import read_rdf, write_rdf
+from qpym2.core.qroot import get_staging_defs, get_roi_cuts
 
 
 def _create_rdf_m2mc(
@@ -18,16 +19,7 @@ def _create_rdf_m2mc(
     TODO:
         - see if we need ` && cutsTree.Included && cutsTree.FullMultiplet`
     """
-    defs = [
-        ('e1',   evar),
-        ('esum', esum_var),
-        ('ch1',  ch1),
-        ('ch2',  ch2),
-        ('ds',   ds),
-        ('t',    t),
-    ]
-    defs.append(('u0', f'{esum_var}/sqrt(2)'))
-    defs.append(('v0', f'(2*{evar} - {esum_var})/sqrt(2)'))
+    defs = get_staging_defs(evar, esum_var, ch1, ch2, ds, t)
     debug(defs)
 
     filters = [base_cuts] + (extra_filters or [])
@@ -55,6 +47,15 @@ def _create_rdf_m2mc(
 
 def _cfg_kwargs(cfg):
     """Extract _create_rdf_m2mc keyword args from a Hydra cfg object."""
+    roi = cfg.models.m2uv.roi
+    roi_cuts = get_roi_cuts(
+        esum_var=cfg.qroot.esum_var,
+        evar=cfg.qroot.evar,
+        esum_min=roi.esum_min,
+        esum_max=roi.esum_max,
+        threshold=roi.threshold,
+        shift_padding=roi.shift_padding,
+    )
     return dict(
         treename=cfg.qroot.treename,
         evar=cfg.qroot.evar,
@@ -64,8 +65,8 @@ def _cfg_kwargs(cfg):
         ds=cfg.qroot.ds,
         t=cfg.qroot.t,
         add_friends=list(cfg.qroot.add_friends),
-        base_cuts=cfg.cuts.base_cuts,
-        outpath=cfg.staging.outpath,
+        base_cuts=f"{cfg.cuts.base_cuts} && {roi_cuts}",
+        outpath=cfg.infrastructure.output_paths.staging_dir,
         output_treename=cfg.staging.output_treename,
         output_columns=list(cfg.staging.output_columns),
     )
@@ -134,7 +135,7 @@ def create_rdf_m2data(cfg, out_fname="", extra_filters=None):
     fname = cfg.infrastructure.data_files.reduced_data
     data_name = cfg.infrastructure.naming_conventions.data_name
     if out_fname == '':
-        out_fname = f'{cfg.staging.outpath}/{data_name}.root'
+        out_fname = f'{cfg.infrastructure.output_paths.staging_dir}/{data_name}.root'
     _create_rdf_m2mc(
         fname,
         mcpath=cfg.infrastructure.directories.reduced_data_dir,
@@ -168,8 +169,10 @@ def _run_bkg(fname, cfg):
     create_rdf_m2bkg(fname, cfg)
 
 
-def _run_ndbd(fname, cfg):
-    create_rdf_m2ndbd(fname, cfg)
+def _run_ndbd(cfg):
+    ndbd_name = cfg.infrastructure.naming_conventions.ndbd_staging
+    out_fname = f'{cfg.infrastructure.output_paths.staging_dir}/{ndbd_name}.root'
+    create_rdf_m2ndbd(cfg.infrastructure.file_patterns.ndbd_pattern, cfg, out_fname=out_fname)
 
 
 def _run_data(cfg):
@@ -182,7 +185,7 @@ def build_staging_jobs(cfg, include_bkg=True, include_ndbd=True, include_data=Tr
     if include_bkg:
         jobs += [('bkg', f) for f in _bkg_fnames(cfg)]
     if include_ndbd:
-        jobs += [('ndbd', f) for f in _ndbd_fnames(cfg)]
+        jobs += [('ndbd', cfg.infrastructure.file_patterns.ndbd_pattern)]
     if include_data:
         fname = cfg.infrastructure.data_files.reduced_data
         jobs += [('data', fname)]
@@ -209,8 +212,8 @@ def main():
     )
     parser.add_argument('--environment', '-e', default='nersc')
     parser.add_argument('--analysis', '-a', default='m2')
-    parser.add_argument('--ncores', '-n', type=int, default=None,
-                        help='Pool size; default = os.cpu_count()')
+    parser.add_argument('--ncores', '-n', type=int, default=25,
+                        help='Pool size; default = 25')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--ndbd-only', action='store_true')
     group.add_argument('--bkg-only', action='store_true')
@@ -220,11 +223,14 @@ def main():
     cfg = get_config(environment=args.environment, analysis=args.analysis)
     setup_logging(cfg)
 
+    import pathlib
+    pathlib.Path(cfg.infrastructure.output_paths.staging_dir).mkdir(parents=True, exist_ok=True)
+
     pool = JobPool()
     if not args.ndbd_only and not args.data_only:
         pool.extend(_run_bkg, [(f, cfg) for f in _bkg_fnames(cfg)])
     if not args.bkg_only and not args.data_only:
-        pool.extend(_run_ndbd, [(f, cfg) for f in _ndbd_fnames(cfg)])
+        pool.add(_run_ndbd, cfg)
     if not args.bkg_only and not args.ndbd_only:
         pool.add(_run_data, cfg)
 

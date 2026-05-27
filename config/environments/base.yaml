@@ -18,11 +18,11 @@ infrastructure:
     # Directory with background monte-carlo simulations
     bkg_mc_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/BM_1ton/out_ares"
     # Directory containing the reduced CUORE data file (reduced_data)
-    reduced_data_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
+    reduced_data_dir: "${infrastructure.directories.bm_dir}"
 
   # Output paths
   output_paths:
-    staging_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging"
+    staging_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging_150"
     data_dir: "data"          # Base results directory; if set, plots/syst_results/toy_results are derived from it
 
   # Data files
@@ -61,7 +61,7 @@ qroot:
 staging:
   output_treename: "uvtree"
   outpath: "output"
-  output_columns: ["u", "v", "ch1", "ch2", "ds", "t"]
+  output_columns: ["u0", "v0", "ch1", "ch2", "ds", "t"]
 
 # System settings
 system:

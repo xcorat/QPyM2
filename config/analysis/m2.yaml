@@ -13,7 +13,7 @@ models:
     roi:
       esum_max: 2570
       esum_min: 2400
-      threshold: 200
+      threshold: 150
       shift_padding: 10
     
     # Calculated binning ranges
