@@ -1,4 +1,6 @@
-== Mathematical procedures ==
+== Mathematical procedures <sec:mathematical_procedures>
 
-=== Combining posteriors ===
+=== Combining posteriors <sec:combining_posteriors>
+
+=== Background Model Peak Modes <sec:bm_mode> ===
 

@@ -15,67 +15,176 @@
   #table(..args)
 ]
 
-= Systematic Uncertainties
+// ── Systematic fit values ──────────────────────────────────────────────────
+// Source of truth: output/syst_rate_results.md  (2026-05-31)
+// Placeholder "?" marks values not yet extracted from fit output files.
 
-This section details the systematic uncertainties in the M2 fit, including contributions from the CUORE background model (BM), data production (lineshape errors), and model selection. For most systematic effects, the shape of the component spectra changes when merging the original MC spectra. However, recreating these components and fitting at each and every grid point is computationally prohibitive, and we resort to the poor-man's version of sampling the systematic variations around the reference fit for each possibly contribution independently. The main sources of systematic uncertainty are:
+// Nominal fit (reference: cs=1.0, gamma10_v150, u1740)
+#let nom_raw_mode  = "11.70"
+#let nom_raw_hdi_l = "4.95"
+#let nom_raw_hdi_r = "20.38"
+#let nom_bc_mode   = "15.26"
+#let nom_bc_hdi_l  = "8.59"
+#let nom_bc_hdi_r  = "23.81"
+
+// BM MC statistical
+#let bmmc_raw_mode   = "10.90"
+#let bmmc_raw_hdi_l  = "3.89"
+#let bmmc_raw_hdi_r  = "18.91"
+#let bmmc_raw_dhdi_l = "-1.06"
+#let bmmc_raw_dhdi_r = "-1.47"
+#let bmmc_bc_mode    = "14.47"
+#let bmmc_bc_hdi_l   = "7.55"
+#let bmmc_bc_hdi_r   = "22.36"
+#let bmmc_bc_dhdi_l  = "-1.04"
+#let bmmc_bc_dhdi_r  = "-1.45"
+
+// LSS ΔQ (±1σ)
+#let lss_dq_raw_mode   = "12.13"
+#let lss_dq_raw_hdi_l  = "3.08"
+#let lss_dq_raw_hdi_r  = "23.37"
+#let lss_dq_raw_dhdi_l = "-1.86"
+#let lss_dq_raw_dhdi_r = "+3.00"
+#let lss_dq_bc_mode    = "15.68"
+#let lss_dq_bc_hdi_l   = "6.76"
+#let lss_dq_bc_hdi_r   = "26.77"
+#let lss_dq_bc_dhdi_l  = "-1.84"
+#let lss_dq_bc_dhdi_r  = "+2.96"
+
+// LSS σ-scaling (+1σ)
+#let lss_sscl_raw_mode   = "12.41"
+#let lss_sscl_raw_hdi_l  = "4.16"
+#let lss_sscl_raw_hdi_r  = "21.09"
+#let lss_sscl_raw_dhdi_l = "-0.78"
+#let lss_sscl_raw_dhdi_r = "+0.71"
+#let lss_sscl_bc_mode    = "15.96"
+#let lss_sscl_bc_hdi_l   = "7.82"
+#let lss_sscl_bc_hdi_r   = "24.51"
+#let lss_sscl_bc_dhdi_l  = "-0.77"
+#let lss_sscl_bc_dhdi_r  = "+0.70"
+
+// Signal energy shift (Δ = 1.0 keV/MeV)
+#let ndbdshift_raw_mode   = "10.62"
+#let ndbdshift_raw_hdi_l  = "4.53"
+#let ndbdshift_raw_hdi_r  = "18.86"
+#let ndbdshift_raw_dhdi_l = "-0.42"
+#let ndbdshift_raw_dhdi_r = "-1.51"
+#let ndbdshift_bc_mode    = "14.19"
+#let ndbdshift_bc_hdi_l   = "8.18"
+#let ndbdshift_bc_hdi_r   = "22.32"
+#let ndbdshift_bc_dhdi_l  = "-0.42"
+#let ndbdshift_bc_dhdi_r  = "-1.49"
+
+// Cobalt shift selection (likelihood-weighted marginalisation) — bc only
+#let cobalt_bc_mode    = "15.83"
+#let cobalt_bc_hdi_l   = "8.24"
+#let cobalt_bc_hdi_r   = "23.54"
+#let cobalt_bc_dhdi_l  = "-0.35"
+#let cobalt_bc_dhdi_r  = "-0.27"
+
+// Bias correction (central vs. covariance-sampled BC parameters)
+// raw row = nominal raw (BC does not affect pre-correction posterior)
+#let biascorr_raw_mode   = nom_raw_mode
+#let biascorr_raw_hdi_l  = nom_raw_hdi_l
+#let biascorr_raw_hdi_r  = nom_raw_hdi_r
+#let biascorr_bc_mode    = "15.98"
+#let biascorr_bc_hdi_l   = "8.43"
+#let biascorr_bc_hdi_r   = "24.01"
+#let biascorr_bc_dhdi_l  = "-0.16"
+#let biascorr_bc_dhdi_r  = "+0.20"
+
+// Marginalised posterior and split-Gaussian smearing widths
+#let marg_mode    = "16.60"
+#let marg_hdi_l   = "8.04"
+#let marg_hdi_r   = "25.70"
+#let marg_p90     = "29.81"
+#let marg_sigma_p = "4.89"
+#let marg_sigma_m = "3.98"
+
+// ── syst_table helper ─────────────────────────────────────────────────────
+// Two-row (non-corrected / bias-corr) table.
+// Columns: Fit | Mode | Δ Mode | 68% HDI | Δ HDI
+// d_mode:  shift in mode vs. nominal (shown on non-corrected row)
+// d_hdi_l/r: shift in 68% HDI edges vs. nominal (shown on bias-corr row)
+#let syst_table(
+  raw_mode:    "?",
+  raw_hdi_l:   "?",
+  raw_hdi_r:   "?",
+  d_mode:      "?",
+  raw_d_hdi:   [—],
+  d_bc_mode:   "?",
+  bc_mode:     "?",
+  bc_hdi_l:    "?",
+  bc_hdi_r:    "?",
+  d_hdi_l:     "?",
+  d_hdi_r:     "?",
+) = btable(
+  columns: (auto, 1fr, 1fr, 2fr, 1.5fr),
+  inset: 6pt,
+  align: (left, center, center, center, center),
+  table.header([*Fit*], [*Mode*], [*$Delta$ Mode*], [*68% HDI*], [*$Delta$ HDI*]),
+  [non-corrected], [#raw_mode], [#d_mode],    [#raw_hdi_l, #raw_hdi_r], raw_d_hdi,
+  [bias-corr],     [#bc_mode],  [#d_bc_mode], [#bc_hdi_l, #bc_hdi_r],  [#d_hdi_l, #d_hdi_r],
+)
+// ─────────────────────────────────────────────────────────────────────────
+
+= Systematic Uncertainties <systematics>
+
+This section evaluates the impact of systematic uncertainties on the extracted #ndbd event count. The evaluation metric, HDI-edge shift method, and marginalization procedure are described in @methods. The following sources are considered:
 
 1. BM fit statistical errors.
-2. PSA efficiency.
-3. Line-shape modeling in BM simulations.
+2. Lineshape modeling (LSS).
+3. Signal energy shift.
 4. Cobalt shift selection.
-5. #ndbd spectrum shift.  
+5. Bias correction parameters.
+6. PSA efficiency.
 
-The $Delta = 1.0$ keV/MeV Cobalt shift is used as the reference.
+The reference model uses the fit from @results with cobalt shift $Delta = 1.0$ keV/MeV, `gamma10_v150` cobalt cut, and `u1740` signal cutoff.
 
-== Estimating Systematic Uncertainties
-
-For each source of systematic uncertainty, we estimate its impact by refitting the data with a model with the varied parameters. All studies other than background model systematics simply use one or two points in the systematic parameter space and compare the resulting posterior to the reference fit. We tested multiple interval estimators for quantifying the systematic shift, including the shift in mode, but chose to report the left and right shifts the the 68% high density interval as assymmetric systematic uncertainties.
-
-== BM fit errors 
+== BM fit errors <sec:bm_fit_errors>
 
 #figure(
   placement: auto,
   image("../images/06-bmmc_trace_combined_posterior_biascorr_cs1p0.png", width: 100%),
-  caption: [Bias-corrected combined posterior vs. nominal ($"cs" = 1.0$). Dashed lines: mode; dotted: p16/p84; dash-dotted: p90.],
+  caption: [Bias-corrected combined posterior vs. nominal ($Delta = 1.0 times 10^(-3)$).\ Dashed lines: mode; dotted: 68% HDI],
 )<fig-bmmc>
 
-We assess the impact of BM statistical fluctuations by repeating the M2 fit with background spectra generated from 500 random samples of the BM posterior (JAGS output). For each sample, we perform the M2 fit, and combine the posteriors across all samples, (TODO: weighted by their maximum likelihoods) to obtain a distribution of the $0 nu beta beta$ rate. We take the shift in the mode of this distribution compared to the reference fit as a systematic bias (TODO: since the width of the posterior is quite similar to that of th reference fit.), which we evaluate to be -0.46 events. <fig-bmmc>
-// The resulting systematic uncertainty is derived from the spread of this distribution compared to the referece posterior.
+We assess the impact of BM statistical fluctuations by repeating the M2 fit with 500 background spectra, each drawn from a random sample of the BM posterior (JAGS output). The per-sample posteriors are combined via likelihood-weighted mixture (@methods), yielding the combined posterior in @fig-bmmc. The combined posterior shifts left by approximately 1 event relative to the reference.
 
 
-#academic-table(
-  [BM MC systematic: mode and p90 shifts (raw and bias-corrected). All values in events.],
-  header: ([*BMMC syst*], [*Nominal*], [*Syst (BMMC)*], [*$Delta$ mode*], [*$Delta$ 68% HDI*]),
-  (
-    [mode], [15.25], [14.47], [-0.79], [-1.044, +0],
-    // [p90],  [24.56], [23.18], [-1.38], [-1.41],
-  ),
-  columns: (1.5fr, 1fr, 1fr, 1fr, 1fr),
-  align: (left, center, center, center, center),
-)
+#align(center)[
+  #syst_table(
+    raw_mode: bmmc_raw_mode, raw_hdi_l: bmmc_raw_hdi_l, raw_hdi_r: bmmc_raw_hdi_r,
+    d_mode: "-0.80", raw_d_hdi: [#bmmc_raw_dhdi_l, #bmmc_raw_dhdi_r],
+    d_bc_mode: "-0.79",
+    bc_mode: bmmc_bc_mode, bc_hdi_l: bmmc_bc_hdi_l, bc_hdi_r: bmmc_bc_hdi_r,
+    d_hdi_l: bmmc_bc_dhdi_l, d_hdi_r: bmmc_bc_dhdi_r,
+  )
+]
 
-== Lineshape Systematics
+== Lineshape Systematics <sec:lineshape_systematics>
 
-The data and the BM MC spectra used here have been processed with the same lineshape scaling (LSS) corrections as the main 1 tonne-yr analysis. To account for the variation of LSS parameters, we rerun the fits while varying the parameters according to their statistical fluctuations in the BM fit.
+The data and BM MC spectra are processed with lineshape scaling (LSS) corrections, which adjust the energy scale ($Delta Q$) and resolution ($sigma(E)$) per dataset. Miscalibration near the ROI can bias signal extraction. We evaluate this systematic by generating spectra with the LSS parameters perturbed by their $plus.minus 1 sigma$ uncertainties and refitting.
 
-The LSS functions and parameters are defined as follows:
+=== Lineshape functions and parameters <sec:lineshape_functions>
+The lineshape model uses an asymmetric Gaussian core:
 
-$ E_a = 1/(1 + A_L + A_R) ( "gaus"(E; mu, sigma) + A_L "gaus"(E; mu, a_L, sigma) + A_R "gaus"(E; mu, a_R, sigma)) $
+$ E_a = 1/(1 + A_L + A_R) ( G(E; mu, sigma) + A_L  G(E; mu, a_L, sigma) + A_R G(E; mu, a_R, sigma)) $
 
-and the scaling functions:
+with per-dataset energy scale and resolution corrections:
 
-$ Delta  Q = mu' - mu = (p_0 + p_1E + p_2^2 E^2) $
-$ sigma(E) = q_0 + q_1E $
+$ Delta Q = mu' - mu = p_0 + p_1 E + p_2 E^2, quad sigma(E) = q_0 + q_1 E $
 
-The parameters $A_L$, $A_R$, $a_L$, $a_R$, and $sigma$ are determined from the peakshape fit#footnote[to Tl-208 2615 peak and saved into `PeakShape_dsNNNN.root files`], and the scaling functions and parameters ($arrow(p), arrow(q)$) are saved as polynomials in energy#footnote[Scaling functions are calculated using the fits to other peaks and the parameters are taken from `residual_and_width_vs_energy_dsNNNN.root` ]. However, trying to apply variations for all events in all the MCs is computationally expensive. Instead, we simulate the errors by applying only a $1 sigma$ variation to the parameters from ares output spectra (staging files).
+The asymmetry parameters ($A_L$, $A_R$, $a_L$, $a_R$) are fixed from the peakshape fit to the $ ""^(208)"Tl"$ 2615 keV peak; the scaling parameters ($arrow(p)$, $arrow(q)$) are derived from fits to other calibration peaks#footnote[TODO: add reference to the 1-tonne analysis for LSS parameter derivation]. Applying full-MC variations require recreating spectra for each sampled LSS point per input source #footnote[recreating spectral histograms is the most time consuming part of the fit, and done only once per fit in current setup]. Instead, the systematic is evaluated by applying only the $plus.minus 1 sigma$ ($+1 sigma$) shifts to LSS parameters, and re-calculating the staged event energies by applying a corrective $Delta Q$ ($sigma$ scaling) #footnote[When creating staging files, a 10 keV padding is added to account for these LSS variations] before creating the input spectra.
 
-For $Delta Q$ systematics, we apply a shift equivalent to $plus.minus 1 sigma$ variation in the $p_0$ and $p_1$ parameters to all the events (per dataset) by the error of the residual fit. The resulting change in the $0 nu beta beta$ mode defines the systematic error for that dataset; we run the systematic on each dataset while keeping the events from the rest of the datasets untouched.
+=== Systematic estimation <sec:lss_estimation>
 
-For the resolution ($sigma$-scaling) systematic, we smear each event by a Gaussian draw from $delta sigma(E) = delta q_1 E dot sigma("ds", "ch")$ at $+1 sigma$.
+For $Delta Q$, a $plus.minus 1 sigma$ shifts in covariant $p_0$ and $p_1$ (from the residual fit uncertainties) are applied to events in one dataset at a time, leaving other datasets unchanged. For $sigma$-scaling, each event is smeared by $delta sigma(E) = delta q_1 E dot sigma("ds", "ch")$ at only $+1 sigma $ (since we cannot sample a narrower gaussian).
 
-=== Systematic estimation: 
+Each perturbed fit is compared directly to the nominal; the 68% HDI edge shifts are measured and extremum shifts $Delta_plus.minus$ for 45 independent pertubations (15 datasets $times$ 3 perturbations: $sigma$-scaling, $2 times "dQ" "at" plus.minus 1sigma$) are recorded.
+//where the sum runs over datasets and perturbation samples ($plus.minus sigma$ for $Delta Q$; $+1 sigma$ for $sigma$-scaling
 
-Rather than combining perturbed posteriors into a mixture, each perturbed fit is compared directly to the nominal. Here too, the systematic for each dataset is taken as the shift in the left and right edges of the 68% HDI around mode of the $0 nu beta beta$ posterior (M2 estimator).
+// We also evaluated two alternative interval estimators — M1 (Only mode shift) and M3 (mode-anchored half-interval) — and found that while M1 gives the most conservative (largest) error estimates, it oversamples the statistical uncertainties; results for M1 and M3 are reported in the appendix.
 
 #figure(
   placement: auto,
@@ -85,65 +194,55 @@ Rather than combining perturbed posteriors into a mixture, each perturbed fit is
     image("../images/lss_dq_perds_barplot.png", width: 90%),
     image("../images/lss_sscl_perds_barplot.png", width: 90%),
   ),
-  caption: [LSS systematic per dataset (HDI interval shift, $"cs" = 1.0$). Each bar shows $Delta n_i$ for the $Delta Q$ (left/right) and $sigma$-scaling perturbations.],
-)
-
-We also evaluated two alternative interval estimators — M1 (Only mode shift) and M3 (mode-anchored half-interval) — and found that while M1 gives the most conservative (largest) error estimates, it oversamples the statistical uncertainties; results for M1 and M3 are reported in the appendix.
-
-The combined LSS uncertainty is obtained by summing in quadrature the per-dataset mode shifts, selecting the maximum of $plus.minus 1 sigma$ for $Delta Q$:
-
-$ n_+ = sqrt(sum_(Delta_i > 0) Delta_i^2), quad n_- = sqrt(sum_(Delta_i < 0) Delta_i^2). $
-
-NOTE: give the inherent statistical variation of the mode, this evalaution overestimates the systematic uncertainty and should be taken as a conservative upper band. TODO: We can possibly substract out the systematic by looking at 15 toy fits and how the mode shifts without the LSS variations?
-// #align(center,
-  #table(
-    columns: (auto, auto, auto),
-    align: (left, right, right),
-    table.header([*Source*], [*$n_+$*], [*$n_-$*]),
-    [$Delta Q: plus.minus 1 sigma$], [+4.70], [$-$3.59],
-    [$sigma$-scaling: $+1 sigma$],   [+1.17], [$-$1.26],
+  caption: [LSS systematic per dataset (HDI interval shift, $Delta = 1.0 times 10^(-3)$). Each bar shows $Delta n_i$ for the $Delta Q$ (left/right) and $sigma$-scaling perturbations.],
   )
-// )
 
-=== Final LSS-marginalized posterior
+=== Final LSS-marginalized posterior <sec:lss_marginalized>
 
-The bias-corrected reference posterior is smeared with a split-Normal kernel whose widths $sigma^+_"LSS"$ and $sigma^-_"LSS"$ are derived from the 45 per-dataset mode shifts (15 datasets $times$ 3 perturbations: $sigma$-scaling, dQ $+1sigma$, dQ $-1sigma$), combined in quadrature per side. This gives the final LSS-marginalized posterior shown in @fig-lss-splitgaus-posterior, with mode and 90% upper-limit shifts summarised in // @tbl-lss-splitgaus-stats.
+The combined effect of left-right bradening of the HDI interval due to LSS ($n_plus.minus$ per dQ and $sigma$) is calculated by combining the above $Delta_plus.minus$ values in quadrature per side per dataset as described in @methods.
+
+
+  $ n_+ = sqrt(sum_("ds", plus.minus) (Delta^+_i)^2), quad n_- = sqrt(sum_("ds", plus.minus) (Delta^-_i)^2) $
+
+The reference posterior is smeared with a split-Gaussian kernel of these widths, giving the LSS-marginalized posterior in @fig-lss-splitgaus-posterior.
 
 #figure(
   image("../images/lss_syst_posteriors.png", width: 100%),
-  caption: [LSS pit-Gaussian marginalized posterior vs.\ bias-corrected reference (cs=1.0). Dashed: mode; dotted: p16/p84; dash-dotted: p90.],
+  caption: [LSS split-Gaussian marginalized posterior vs.\ bias-corrected reference (cs=1.0). Dashed: mode; dotted: 68% HDI;],
 ) <fig-lss-splitgaus-posterior>
 
-// #academic-table(
-//   [LSS systematic: mode and p90 shifts. All values in events (bias-corrected).],
-//   header: ([*LSS*], [*Reference (BC)*], [*LSS-marginalized (BC)*], [*$Delta$*]),
-//   (
-//     [mode], [15.55], [13.63], [-1.92],
-//     [p90],  [27.49], [27.76], [+0.27],
-//   ),
-//   columns: (1.5fr, 1fr, 1fr, 1fr),
-//   label: <tbl-lss-splitgaus-stats>,
-// )
+#align(center)[
+  #btable(
+    columns: (auto, auto, 1fr, 1fr, 2fr, 1.5fr),
+    inset: 6pt,
+    align: (left, left, center, center, center, center),
+    table.header([*Systematic*], [*Fit*], [*Mode*], [*$Delta$ Mode*], [*68% HDI*], [*$Delta$ HDI*]),
+    table.cell(rowspan: 2)[$Delta Q$ ($plus.minus 1 sigma$)],
+    [non-corrected], [#lss_dq_raw_mode],  [+0.43], [#lss_dq_raw_hdi_l, #lss_dq_raw_hdi_r], [#lss_dq_raw_dhdi_l, #lss_dq_raw_dhdi_r],
+    [bias-corr],     [#lss_dq_bc_mode],   [+0.42], [#lss_dq_bc_hdi_l, #lss_dq_bc_hdi_r],  [#lss_dq_bc_dhdi_l, #lss_dq_bc_dhdi_r],
+    table.cell(rowspan: 2)[$sigma$-scaling ($+1 sigma$)],
+    [non-corrected], [#lss_sscl_raw_mode], [+0.71], [#lss_sscl_raw_hdi_l, #lss_sscl_raw_hdi_r], [#lss_sscl_raw_dhdi_l, #lss_sscl_raw_dhdi_r],
+    [bias-corr],     [#lss_sscl_bc_mode],  [+0.70], [#lss_sscl_bc_hdi_l, #lss_sscl_bc_hdi_r],  [#lss_sscl_bc_dhdi_l, #lss_sscl_bc_dhdi_r],
+  )
+]
 
-== Systematics due to possible shift in $0 nu beta beta$ decay
+== Signal energy shift systematic <sec:signal_shift_syst>
 
-We also evaluate potential systematic bias from a shift in the $0 nu beta beta$ spectrum, analogous to the Cobalt shift. Using a signal spectrum shifted by $Delta = 1.0$ keV/MeV, we repeat the fitting procedure (including BM variations). shows the raw posterior overlaid with the nominal, and @fig-ndbd-shift-bc shows the bias-corrected posteriors. The resulting shifts are summarised in @tbl-ndbd-shift-stats.
-
+A mismatch between the true $0 nu beta beta$ peak position and the signal template similar to the cobalt shift could bias the extracted event count. To account for the possibility that the signal might also be shifted due to the same mechanism as the #Co60 peaks, we refit with a signal spectrum shifted by $Delta = 1.0$ keV/MeV and record the 68% HDI edge displacement (@fig-ndbd-shift).
 #figure(
   image("../images/06-ndbd_shift_posterior_biascorr_cs1p0.png", width: 100%),
   caption: [Bias-corrected posterior with shifted $0 nu beta beta$ signal (blue) vs.\ nominal (red).]
-) <fig-ndbd-shift-bc>
+) <fig-ndbd-shift>
 
-#academic-table(
-  [Summary of $0 nu beta beta$ shift systematic: mode and 90% upper limit for nominal and shifted fits, raw and bias-corrected.],
-  header: ([*NDBD shift*], [*Nominal*], [*Syst (shift)*], [*$Delta$ mode*], [*$Delta$ 68% HDI*]),
-  (
-    [mode], [15.25], [14.19], [-1.07], [-.42, +0],
-    // [p90],  [24.55], [22.53], [-2.03], [-1.97],
-  ),
-  columns: (1.5fr, 1fr, 1fr, 1fr, 1fr),
-  label: <tbl-ndbd-shift-stats>,
-)
+#align(center)[
+  #syst_table(
+    raw_mode: ndbdshift_raw_mode, raw_hdi_l: ndbdshift_raw_hdi_l, raw_hdi_r: ndbdshift_raw_hdi_r,
+    d_mode: "-1.09", raw_d_hdi: [#ndbdshift_raw_dhdi_l, #ndbdshift_raw_dhdi_r],
+    d_bc_mode: "-1.07",
+    bc_mode: ndbdshift_bc_mode, bc_hdi_l: ndbdshift_bc_hdi_l, bc_hdi_r: ndbdshift_bc_hdi_r,
+    d_hdi_l: ndbdshift_bc_dhdi_l, d_hdi_r: ndbdshift_bc_dhdi_r,
+  )
+] <tbl-ndbd-shift-stats>
 
 // NOTE: we only need this if we are using ndbd uncorrected counts for systematics. using bias-corrected 
 // errors standardize all the errors prior to PSA.
@@ -152,9 +251,10 @@ We also evaluate potential systematic bias from a shift in the $0 nu beta beta$ 
 // Studying the systematic effets from the Bias correction and PSA efficiency is done using the posterior distribution marginalized across the three studies above. We combine the posteriors from these three studies assuming our posteriors are close to a split-gaussian distribution, and shift in mode for each study are combined in quadrature (seperately for left and right shifts) to obtain the left and right widths of the gaussian broadening of the reference posterior. 
 
 
-== Cobalt shift selection 
+== Cobalt shift selection <sec:systematics_co60>
 
-// The combined posterior is wider than the reference, with a mode shift of *XX* and a 90% upper limit of *XX*.
+The cobalt shift $Delta$ is fixed to $1.0$ keV/MeV in the reference model, but its optimal value is uncertain. We treat this choice as a systematic by forming a likelihood-weighted mixture posterior over all seven tested shift values (weights shown in @fig-comarg), following the procedure in @methods, and comparing it to the reference.
+
 #figure(
   placement: auto,
   grid(
@@ -171,16 +271,24 @@ We also evaluate potential systematic bias from a shift in the $0 nu beta beta$ 
         [0.000], [0.003], [0.024], [0.530], [0.309], [0.044], [0.090], [*weight*],
       )
     ],
-    image("../images/comarg_ref_vs_comarg_bc.png"),
+    grid(
+      columns: (1fr, 1fr),
+      column-gutter: 0.5em,
+      image("../images/comarg_ref_vs_comarg_bc.png", width: 100%),
+      image("../images/comarg_per_shift_bc_posteriors.png", width: 85%),
+    ),
   ),
-  caption: [Nominal ($Delta = 1.0$ keV/MeV) vs.\ co-shift combined bias-corrected posterior. Left: per-shift likelihood weights used for the combination.]
+  caption: [Cobalt shift systematic. Left: likelihood-weighted combined bc posterior vs.\ nominal ($Delta = 1.0$ keV/MeV). Right: bc posteriors for each tested shift value.]
 ) <fig-comarg>
 
-We consider the marginalization over the Cobalt shift as a source of systematic uncertainty by comparing the width of the combined posterior over all shifts to that of the reference fit (with $Delta = 1.0$ keV/MeV). The combined posterior is obtained via adding the bias corrected posterior for each of the shifts weighted by their mean likelihood, which is then compared to the bias corrected reference posterior (@fig-comarg). 
+The combined posterior shifts left by approximately $0.5$ events. We take the average of the left and right 68% HDI displacements ($-0.51$ events) as the systematic bias from cobalt shift selection.
 
-The combined posterior is shifted to left close to half an event compared to the reference as evident by the shifts in left and right 68% HDI edges, and we cite the average of the two ($-0.51$ events) as the systematic bias due to the Cobalt shift selection.
+// No raw posterior available for cobalt shift (likelihood-weighted marginalisation only).
+// bc: mode=#cobalt_bc_mode, HDI=[#cobalt_bc_hdi_l, #cobalt_bc_hdi_r], Δ=[#cobalt_bc_dhdi_l, #cobalt_bc_dhdi_r]
 
-== Bias Correction Systematics
+== Bias Correction Systematics <sec:bias_correction_syst>
+
+Low-statistics posteriors carry a reconstruction bias that is corrected before quoting results (TODO: add cross-reference to bias correction derivation). The correction parameters carry statistical uncertainties from calibration fits; we propagate these by sampling them from their covariance matrix and reapplying the correction.
 
 #figure(
   placement: auto,
@@ -188,19 +296,12 @@ The combined posterior is shifted to left close to half an event compared to the
     columns: 1,
     row-gutter: 1em,
     align(center)[
-      #btable(
-        columns: (auto, auto, auto, auto, auto),
-        inset: 6pt,
-        align: center,
-        table.header(
-          [*Quantity*], [*Reference*], [*Systematic*], [*$Delta$ Mode*], [*$Delta$ 68% HDI*],
-        ),
-        [mode],    [15.10], [15.97], [+0.87], [-0.11, +0.17],
-        // [p16],     [ 9.74], [ 9.61], [$-$0.13],
-        // [p84],     [25.17], [25.26], [+0.09],
-        // [p90 UL],  [27.79], [27.92], [+0.13],
-        // [$Delta sigma_+$], [10.08], [9.29], [$-$0.78],
-        // [$Delta sigma_-$], [ 5.36], [6.36], [+1.00],
+      #syst_table(
+        raw_mode: biascorr_raw_mode, raw_hdi_l: biascorr_raw_hdi_l, raw_hdi_r: biascorr_raw_hdi_r,
+        d_mode: "+0.00",
+        d_bc_mode: "+0.73",
+        bc_mode: biascorr_bc_mode, bc_hdi_l: biascorr_bc_hdi_l, bc_hdi_r: biascorr_bc_hdi_r,
+        d_hdi_l: biascorr_bc_dhdi_l, d_hdi_r: biascorr_bc_dhdi_r,
       )
     ],
     image("../images/bias_corr_comparison.png"),
@@ -208,15 +309,15 @@ The combined posterior is shifted to left close to half an event compared to the
   caption: [Reference (central bias-correction parameters) vs.\ systematic (bias-correction parameters sampled from their covariance) bias-corrected posterior. All values in bias-corrected event counts. The systematic uncertainty is taken as $[+Delta sigma_+, -Delta sigma_-] = [-0.78, -1.00]$ events.]
 ) <fig-biascorrsyst>
 
-To evaluate how the results change when applying the bias correction, we generate a posterior distribution by applying the bias correction while sampling its parameters with their covariance uncertainties (@fig-biascorrsyst). The mode of the systematically varied posterior shifts by $+0.87$ events, while the 68% interval edges move by $-0.13$ (lower) and $+0.09$ (upper), indicating modest asymmetric broadening. We take the change in the split-Gaussian widths, $[+Delta sigma_+, -Delta sigma_-] = [-0.78, -1.00]$ events, as the systematic uncertainty due to the bias correction procedure.
+The varied posterior shifts by $+0.87$ events in mode, with 68% HDI edges moving by $-0.13$ (lower) and $+0.09$ (upper). We take $[+Delta sigma_+, -Delta sigma_-] = [-0.78, -1.00]$ events as the systematic uncertainty (@fig-biascorrsyst).
 
-== PSA Systematics
+== PSA Systematics <sec:psa_systematics>
 
 Uncertainties in PSA efficiency curves can affect the fit. Ares simulations account for efficiency by discarding events probabilistically. The exposure-averaged signal efficiency is 98%. The error on efficiency is 0.12%, and this is propagated directly to the rate calculation from the marginalized bias corrected posterior that include all the other systematics.
 
-== Summary of Results
+== Summary of Results <sec:systematics_summary>
 
-@tbl-syst-summary lists all systematic contributions to the $0 nu beta beta$ event count, each evaluated as a signed shift in the bias-corrected posterior mode relative to the reference fit ($Delta = 1.0$ keV/MeV, `gamma10_v150` cut, `u1740` signal cutoff). All values are in bias-corrected event counts. Right ($+$) and left ($-$) uncertainties are combined in quadrature separately to give the total split-Gaussian smearing widths.
+@tbl-syst-summary lists all systematic contributions to the $0 nu beta beta$ event count, evaluated as signed 68% HDI edge shifts relative to the reference fit ($Delta = 1.0$ keV/MeV, `gamma10_v150` cut, `u1740` signal cutoff). All values are in bias-corrected event counts; right ($+$) and left ($-$) contributions are combined in quadrature independently.
 
 #academic-table(
   [Summary of systematic uncertainties on the $0 nu beta beta$ event count (bias-corrected). All values in events. The TOTAL row gives the quadrature sum of each side independently.],
@@ -226,31 +327,19 @@ Uncertainties in PSA efficiency curves can affect the fit. Ares simulations acco
     [LSS — $sigma$-scaling ($+1 sigma$)],                  [$+1.17$], [$-1.24$],
     [BM MC statistical],                                   [$+0.00$], [$-1.04$],
     [$0 nu beta beta$ spectrum shift ($1.0$ keV/MeV)],     [$+0.00$], [$-0.42$],
-    [Cobalt shift selection],                              [$+0.00$], [$-0.28$],
-    [Bias correction],                                     [$+0.17$], [$-0.10$],
+    [Cobalt shift selection],                              [$+0.00$], [$-0.35$],
+    [Bias correction],                                     [$+0.20$], [$-0.16$],
     table.hline(),
-    [*TOTAL (quad-sum)*],                                  [*$+4.89$*], [*$-3.97$*],
+    [*TOTAL (quad-sum)*],                                  [*$+4.89$*], [*$-3.98$*],
   ),
   columns: (2.2fr, 1fr, 1fr),
   align: (left, center, center),
   label: <tbl-syst-summary>,
 )
 
-PSA efficiency uncertainty (0.12% on $epsilon_"PSA" = 0.98$) is propagated independently at the rate-conversion stage and contributes a negligible $tilde.op 0.1%$ relative shift to the rate, subdominant to the statistical uncertainty.
+PSA efficiency uncertainty (0.12% on $epsilon_"PSA" = 0.98$) is propagated at the rate-conversion stage and contributes a negligible $tilde.op 0.1%$ relative shift, subdominant to the statistical uncertainty.
 
-The bias-corrected reference posterior has mode $= 15.3$ and $p_{90} = 27.9$ events. After marginalising over all systematic contributions via split-Gaussian KDE smearing (widths $sigma^+ = 6.9$, $sigma^- = 5.3$ events), the marginalised posterior has mode $= 17.0$ and $p_{90} = 31.3$ events (@fig-final-rate).
+The total uncertainty is dominated by lineshape modeling: LSS $Delta Q$ alone contributes $+4.7$ and $-3.6$ events. Bias correction and BM MC contributions are subdominant; cobalt and signal shift terms are negligible. No single systematic variation qualitatively reshapes the posterior.
 
-Following rate conversion with exposure $= 1038.7$ kg$dot$yr, isotopic fraction $eta = 0.342$, $N_("TeO"_2) = 3.773 times 10^{24} "mol"^{-1}$, signal efficiency $epsilon_"MC"$, and PSA efficiency $epsilon_"PSA"$, the final marginalised rate posterior gives:
+The bias-corrected reference posterior has mode $= #nom_bc_mode$ events. After marginalising over all sources via split-Gaussian smearing (widths $sigma^+ = #marg_sigma_p$, $sigma^- = #marg_sigma_m$ events), the marginalised posterior has mode $= #marg_mode$ and $p_90 = #marg_p90$ events. Rate conversion and the final result are presented in @conclusion.
 
-$ Gamma_(0 nu) = 3.5 times 10^(-25) "yr"^(-1) quad ("mode") $
-$ Gamma_(0 nu) < 6.33 times 10^(-25) "yr"^(-1) quad (90% "C.L.") $
-
-which translates to a lower limit on the half-life of:
-
-$ T_(1/2)^(0 nu) > 1.09 times 10^24 "yr" quad (90% "C.L.") $
-
-#figure(
-  placement: auto,
-  image("../images/06_syst_rate_new_final_rate_posterior.png", width: 70%),
-  caption: [Final $0 nu beta beta$ decay rate posterior, marginalised over all systematic uncertainties and PSA efficiency. Red: mode; green dashed: 90% upper limit; shaded band: 68% HDI.],
-) <fig-final-rate>

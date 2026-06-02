@@ -1,5 +1,5 @@
 
-== LSS Systematic: Alternative Methods (M2, M3)
+== LSS Systematic: Alternative Methods (M2, M3) <sec:lss_alt_methods>
 
 We evaluated two additional estimators for the LSS systematic uncertainty.
 

@@ -1,3 +1,5 @@
+#import "common.typ": *
+
 #let btable(..args) = block(stroke: (bottom: 1.5pt))[
   #set table(
     stroke: (x, y) => (
@@ -19,24 +21,21 @@
 #let fit_u238   = (mode: "313.5", exp: "332.6", std: "234.8", p90: "348.2")
 #let fit_th232  = (mode: "343.5", exp: "631.4", std: "332.6", p90: "392.7")
 #let fit_others = (mode: "435.6", exp: "119.6", std: "142.3", p90: "486.9")
-#let fit_ndbd   = (mode: "12.8",  exp: "--",    std: "--",     p90: "25.2")
+#let fit_ndbd   = (mode: "11.7",  exp: "--",    std: "--",     p90: "24.6")
 
 = Fit Results <results>
 
-We construct our final posterior by selecting the model and combining the posteriors from each cobalt shift fit. The output of each fit is independently bias corrected and then combined with weights proportional to their maximum likelihoods. In this section, we discuss one reference fit in detail, followed by bias correction procedure and the final combined posterior after marginalization over the cobalt shift.
+The final posterior is constructed by bias-correcting the selected model fit and converting the observed number of #ndbd events into a decay rate. This section details the reference fit, the bias correction procedure, and the selection of the best fit Cobalt shift.
 
 == Reference Fit <results.reference_fit>
 
-For the selected model:
+As detailed in @sec:fit_models The selected reference model utilizes:
+- maximal #Co60 removal criteria ($|E_1-E_2| > 212$ keV and the exclusion of 20 keV regions surrounding the gamma peaks),
+- $0 nu beta beta$ continuum threshold of $u < 1740$ keV ($E_"sum" > 2460.4$ keV). 
 
-  - maximal cobalt cuts: $Delta E equiv |E_1-E_2| > 212$ keV and exclusion of 20 keV regions around $gamma$ peaks,
-  - moderate $0 nu beta beta$ cuts: $E_"sum" > 1740 sqrt(2) = 2460.4$ keV,
+//The best fit cobalt shift parameter for this configuration is $Delta = 0.8 times 10^(-3)$, but the marginalization as described in <sec:marg_co60> yields $Delta = 1.0 times 10^(-3)$.
 
-the optimal cobalt shift correction is $Delta = 0.8$ keV/MeV. The following subsections describe the fit parameter values, spectral reconstruction, quality diagnostics, and component correlations for this reference fit.
-
-=== Fit Values <results.fit_values>
-
-The maximum likelihood fit yields #fit_ndbd.mode events in the $0 nu beta beta$ component. As shown in @tbl-fit-values, the fitted component strengths are consistent with background model expectations within uncertainties.
+The maximum likelihood fit extracts #fit_ndbd.mode events for the $0 nu beta beta$ component. As detailed in @tbl-fit-values, the fitted background normalizations are close to expectations, even though we see a possible movement of events from the #Th232 to the 'others' component in the final numbers. Spectral reconstructions projected onto the rotated energy axes (@fig-esum-ediff) are well in agreement with the observed data, demonstrating structureless flat pull residuals.
 
 #figure(
   grid(
@@ -57,12 +56,8 @@ The maximum likelihood fit yields #fit_ndbd.mode events in the $0 nu beta beta$ 
     ),
     image("../images/05_prior_post_mpl.png"),
   ),
-  caption: [Left: fit results for the reference model. Mode (number of events) given in events; expected values and standard deviations are from the JAGS background model. Right: prior and posterior distributions for the background components.]
+  caption: [Left: Fit results for the reference model. Mode given in events; expected priors derived from Monte Carlo variants. Right: Prior densities and scaled posterior distributions for all background components.]
 ) <tbl-fit-values>
-
-=== Spectral Reconstruction <results.spectral_reconstruction>
-
-@fig-esum-ediff shows the fit in the rotated $E_"sum"$ and $E_"diff"$ axes, overlaid on the observed data. The residuals show no significant deviations.
 
 #figure(
   grid(
@@ -75,10 +70,9 @@ The maximum likelihood fit yields #fit_ndbd.mode events in the $0 nu beta beta$ 
   caption: [Spectral reconstruction of the fit projected onto the $E_"sum"$ (left) and $E_"diff"$ (right) axes, with pull residuals.]
 ) <fig-esum-ediff>
 
+All $hat(R)$ convergence diagnostics #footnote[Describe what these are here or in an appendix] are less than 1.001, indicating good Markov chain mixing. @fig-trace shows the MCMC trace for each component parameter across the chains, confirming stability. 
 
-=== Fit Quality and Convergence <results.fit_quality>
-
-All $hat(R)$ convergence diagnostics are less than 1.001, indicating good Markov chain mixing. @fig-trace shows the MCMC trace for each component parameter across the four chains.
+@fig-correlations shows the pairwise posterior correlations between the fit components. Some correlation is present between the $""^(232)$Th and "others" components, as expected from the similarity of their spectral shapes. Crucially, no significant correlation is observed between the $0 nu beta beta$ signal and the cobalt components, validating that the #Co60 shift correction does not bias the signal rate#footnote[Discuss additional component correlations involving the continuum or muons here].
 
 #figure(
   grid(
@@ -88,88 +82,79 @@ All $hat(R)$ convergence diagnostics are less than 1.001, indicating good Markov
     image("../images/05-fit_trace.png"),
     image("../images/05-fit_energy.png"),
   ),
-  caption: [Left: MCMC trace plots for all fit components; stable horizontal bands across chains confirm convergence. Right: fit energy spectrum.]
+  caption: [Left: MCMC trace plots for all fit components; stable horizontal bands verify sampler convergence. Right: Fit energy spectrum.]
 ) <fig-trace>
 
-=== Component Correlations <results.correlations>
-
-@fig-correlations shows the pairwise posterior correlations between fit components. Some correlation is present between the $""^(232)$Th and "others" components, as expected from the similarity of their spectral shapes in this energy region. Crucially, no significant correlation is observed between the $0 nu beta beta$ and cobalt components, validating the shift correction procedure. #footnote[discuss 0v and other correlation, show some numbers for expected components 2nu, muon etc here or section above.]
-
 #figure(
-  image("../images/05-01-posterior_pair_kde.png"),
-  caption: [Pairwise posterior correlation matrix for all fit components.]
+  image("../images/05-01-posterior_pair_kde.png", width: 90%),
+  caption: [Pairwise posterior correlation matrix for the tested components in the reference model.]
 ) <fig-correlations>
 
 
-== Bias correction
+== Bias Correction <results.bias_correction>
 
-To correct the best-fit posterior for scaling and bias using toy MC studies, we evaluate the bias and scaling of each model. We run 200 toy fits on data generated from the best-fit (mode) spectrum with a known number of $0 nu beta beta$ events ($n_(0nu"-inj")$) and record the fitted number of events $n_(0nu"-fit")$.
-
-- $n_(0nu"-inj") \~ text("Uniform")(5, 200)$
-- fit components $f_i$ are the same as the original fit.
-- Best-fit modes $c_i$ are used to generate the toy data, with the injected $0 nu beta beta$ events added on top: 
-    
-    $lambda_"tot" = sum_i c_i + n_(0nu"-inj")$.
-// - Toy component strengths $n_i$ are the best fit values from the original posterior.
-
-We plot the best-fit values and 68% confidence intervals (as errors) against the true $n_(0nu)$#footnote[discuss the lower cutoff for the fits]. Linear fits to these points yield the bias and scaling parameters. For each model (varying Cobalt shift), for all models scaling and bias is consistent with unity ($1-2 sigma$ variation).#footnote[add table]
-
+We run 200 toy fits with injected signal events and evaluate the bias and scaling of our fitted #ndbd posterior as detailed in @sec:methods_bias_correction. Across all tested models with varying cobalt shifts, the bias and scaling strictly conforms to unity within a $1-2 sigma$ statistical variation for all models. The bias correctd posterior, where we apply the correction $n_"corrected" = ( n_("sampled") - b ) / a $, yields $14.88$ events.
 
 #figure(
-  image("../images/05-bias_focus_gamma10_v150_u1740.png"),
-  caption: "Marginalization over Co shifts"
+  image("../images/05-bias_focus_gamma10_v150_u1740.png", width: 90%),
+  caption: [Signal extraction bias and scaling calibration for the reference configuration.]
 )
 
-== Marginalizing over the Cobalt shift <results.marg_co60>
+== Marginalizing over the Cobalt Shift <results.marg_co60>
 
-As discussed in Section 4.5, a Cobalt shift of $Delta = 0.8$ keV/MeV yields the highest likelihood. However, to utilize the full information, we manually marginalize over all fitted shifts by fitting a 2nd order polynomial to the maximum likelihood values of the each shift fit. From the polynomial fit, we estimate the best fit cobalt shift to be $Delta = 1.0$ keV/MeV, which we select as the final best fit.
+As discussed in @sec:model_selection_shift, the cobalt shift of $Delta = 0.8$ keV/MeV yielded the highest likelihood. However, we manually marginalize over all the shifts to leverage full information from all 7 fits by fitting a second-order polynomial to the log-likelihood maxima vs the shifts.
 
-We then apply the bias correction to each sample in the refence posterior distribution to obtain the best fit posterior on the $n_(0nu beta beta)$
-#grid(
-  columns: 2,
-  column-gutter: 1em,
-  align: horizon,
-  image("../images/05-bias_marg.png"),
-  image("../images/05_ref_cs10_raw_vs_corrected.png"),
-  )
-
-
-
-
-
-== Best fit 0vbb rate
-
-After applying bias correction to the reference posterior ($"cs" = 1.0$), we find the bias-corrected $0 nu beta beta$ event count and convert it to a decay rate using the formula:
-
-$ Gamma = n_(0 nu) / (f_(130) dot N_A dot (1000 / M_("TeO"_2)) dot "MT" dot epsilon_("MC") dot epsilon_("PSA")) $
-
-The bias correction parameters for the reference fit (500 toy fits, $n_"inj" in [5, 200]$, excluding $n_"inj" < 15$) are $a = (1.010 plus.minus 0.016)$ and $b = -(2.46 plus.minus 1.55)$, consistent with unity slope and negligible offset.
+This polynomial fit gives a continuous global best-fit estimate of $Delta = 1.0$ keV/MeV, which we select as our nominal reference fit. The full marginalized raw posterior due to cobalt shift is constructed by combining all these posteriors weighted by their maximum likelihood, which we consider as a systematic, discussed in @sec:systematics_co60.
 
 #figure(
   grid(
     columns: 2,
     column-gutter: 1em,
     align: horizon,
+    image("../images/05-bias_marg.png", width: 90%),
+    image("../images/05_ref_cs10_raw_vs_corrected.png", width: 90%),
+  ),
+  caption: [Left: Polynomial marginalization over discrete cobalt shift fits. Right: Reconstructed raw vs bias-corrected posterior distributions for the optimal configuration.]
+)
+
+== Extracted 0vbb Rate <sec:extracted_rate>
+
+Following the application of the bias correction to the optimal reference ($Delta = 1.0 times 10^(-3)$) model, the finalized absolute $0 nu beta beta$ event count is utilized to compute the decay rate via the expression:
+
+$ Gamma = n_(0 nu) / (f_(130) dot N_A dot (1000 / M_("TeO"_2)) dot "MT" dot epsilon_("MC") dot epsilon_("PSA")) $
+
+The bias formulation determined for the reference model configuration utilizes 500 toy simulations specifically within the injected scope of $n_"inj" in [20, 200]$. We remove the lower left quarter of the toy resutls ($n_"inj" < 20$) from the fit to remove possible artefacts due to the zero bound priors. This establishes the intercept at $b = -(3.46 plus.minus 2.55)$ and the gradient stringently at $a = (1.010 plus.minus 0.016)$. These represent near unity parameter scaling and a completely statistically negligible offset.
+
+#figure(
+  grid(
+    columns: 2,
+    column-gutter: 3em,
+    align: horizon,
     btable(
       columns: 2,
       align: (left, right),
       table.header([*Quantity*], [*Event Count*]),
-      [Mode (measured)],     [$12.8$ ],
+      [Mode (measured)],     [#fit_ndbd.mode ],
       [Mode (corrected)],    [$14.4$ ],
       [68% HDI],             [$[6.45, 26.44]$],
-      [90% C.I.],            [$< 26.9$],
+      [90% C.I.],            [$< 26.9$]
+    ),
+    btable(
+      columns: 2,
+      align: (left, right),
       table.header([*Quantity*], [*Value*]),
       [$f_(130)$],           [$0.34167$],
       [$"MT"$],            [$1038.4 "kg" dot "yr"$],
       [$epsilon_("MC")$],    [$0.03547$],
       [$epsilon_("PSA")$],   [$0.98$],
-    ),
-    image("../images/05_ref_cs10_raw_vs_corrected.png"),
+    ) 
   ),
-  caption: [Left: bias-corrected $0 nu beta beta$ event count and rate conversion parameters for the reference fit ($"cs" = 1.0$, `gamma10_v150`, `u1740`). Right: raw (blue) vs bias-corrected (orange) posterior distributions.]
+  caption: [Left: Corrected $0 nu beta beta$ event count \ Right: Rate conversion parameters for the reference fit.]
 )
 
-The resulting $0 nu beta beta$ decay rate and half-life limit are:
+The resulting $0 nu beta beta$ decay rate and half-life limit is:
+
+$ T^(0 nu)_(1/2) < 1.2 times 10^(-24) "yr"^(-1) quad 90%"C.L" $
 
 #figure(
   grid(
@@ -187,5 +172,5 @@ The resulting $0 nu beta beta$ decay rate and half-life limit are:
     ),
     image("../images/05-rate_final_marg.png"),
   ),
-  caption: [Left: bias-corrected $0 nu beta beta$ rate and half-life results for the reference fit. Right: rate posterior distribution.]
+  // caption: [Left: bias-corrected $0 nu beta beta$ rate and half-life results for the reference fit. Right: rate posterior distribution.]
 )

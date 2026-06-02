@@ -1,13 +1,14 @@
 #import "@preview/texst:0.1.2": paper
 #import "@preview/akatable:0.1.0": academic-table
-#set text(lang: "en")
+#import "typst/settings.typ": apply-styles, btable
 
 #show: doc => paper(
   title: [M2 Analysis],
+  subtitle: [CUORE Internal Technical Note],
   authors: ((name: [Sachi Wagaarachchi]),),
   date: [#datetime.today().display("[month repr:long] [day], [year]")],
   abstract: [
-    CUORE Multiplicity 2 analysis note.
+    CUORE Multiplicity 2 analysis internal technial note.
   ],
   style: (
     body_font: "New Computer Modern",
@@ -18,39 +19,32 @@
   doc,
 )
 
+#outline(title: [Table of Contents], indent: auto)
+
+#pagebreak()
 #outline(title: [List of Figures], target: figure.where(kind: image))
+
+#pagebreak()
 #outline(title: [List of Tables], target: figure.where(kind: table))
 
-#set text(font: "New Computer Modern")
-
-#let btable(..args) = block(stroke: (bottom: 1.5pt))[
-  #set table(
-    stroke: (x, y) => (
-      left: none,
-      right: none,
-      top: if y == 0 { 1.5pt } else if y == 1 { 0.75pt } else { none },
-      bottom: none,
-    ),
-    inset: (x: 8pt, y: 5pt),
-    align: left,
-  )
-  #table(..args)
-]
-
-#let ndbd = "ndbd" //[$0 nu beta beta$]
+#show: apply-styles
 
 #pagebreak()
 
+#include "typst/901-prelim-notes.typ"
+#pagebreak()
 #include "typst/910-introduction.typ"
 #pagebreak()
 #include "typst/920-data.typ"
 #pagebreak()
 #include "typst/930-fit_model.typ"
 #pagebreak()
-#include "typst/940-model_selection.typ"
+#include "typst/940-methods.typ"
 #pagebreak()
 #include "typst/950-results.typ"
 #pagebreak()  
 #include "typst/960-systematics.typ"
+#pagebreak()  
+#include "typst/970-conclusion.typ"
 #pagebreak()
 #include "typst/990-appendix.typ"

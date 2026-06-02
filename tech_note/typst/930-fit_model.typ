@@ -3,16 +3,18 @@
 
 = Fit Model <fit_model>
 
-The M2 analysis fit region contains few background features. Therefore, we merge the individual BM Monte Carlo spectra into four main components representing these features. The fit is optimized by rotating the axes and selecting cuts that minimize discrepancies between simulated and observed spectra, particularly near peaks. After evaluating the fits and different models, we also introduce cuts on the fitted #ndbd region as well as cuts and a shift to the #Co60 component to better reconstruct data.
+The M2 Region of Interest (ROI) contains a limited number of spectral features. To accommodate the sparse event statistics, the 84 background components are consolidated into four primary source categories. To optimize convergence, the phase space is rotated, the background distributions are smoothed, and localized cuts and parametric shifts are introduced to mitigate discrepancies in spectra perticularly near the #Co60 sum peak lineshape.
 
-== Merged Input Spectra
+== Merged Input Spectra <sec:merged_spectra>
 
-This anlysis models the expected background as just four components. This simplification is fitting since we only see few observable features in the background spectra with our limited ROI and sparse data. Aside from the #Co60  peaks (1173 keV and 1334 keV), we primarily observe peaks from the #U238 and #Th232 decay chains. Consequently, we combine the 84 BM components into four source-specific groups: #Co60, #U238, #Th232, and 'other' (containing all remaining contaminants).
+The background model is simplified into four source-specific composite spectra: #Co60, #U238, #Th232, and all remaining ('other') contaminants. The prominence of the 1173 keV and 1334 keV gammas, alongside specific #U238 and #Th232 chain peaks, dictates this grouping.
 
-To generate the merged background spectra, we create histograms using the cuts and selection criteria from Section 2.1, scaling each by its best-fit value from the background model. These normalization factors are the modes of the BM fit posteriors #footnote[See Appendix for mode algorithm]. We then sum these scaled histograms to form the M2 background components. The sources are filtered by name to create the merged components, and the table below shows the major contributions for each component. We save both the integral (representing the expected event count) and the normalized spectrum for each component.
+To construct these composites, simulated events passing the selection criteria (@sec:experimental_data) are binned and normalized by their respective Background Model (BM) posterior modes#footnote[See @sec:bm_mode for mode algorithm]. The individual scaled histograms are then summed within their respective categories. @tbl-merged-comps details the leading contributors to each merged component. Both the expected integral counts and normalized shape templates are archived for the fit.
 
+#align(center)[
+#box(width: 90%, [
 #academic-table(
-  [Merged component event counts from JAGS-scaled MC, showing the three most prominent sources within each component.],
+  [Merged component event counts derived from JAGS-scaled Monte Carlo simulations. The three most prominent sources within each category are listed.],
   header: ([*Component (Top Sources)*], [*Sources*], [*Expected Events*], [*% Total*]),
   (
     [*#Co60*], [4], [1904], [62.3%],
@@ -38,25 +40,26 @@ To generate the merged background spectra, we create histograms using the cuts a
     [  TeO2 #super[110m]Ag], [], [39], [],
   ),
   columns: (1.5fr, auto, auto, auto),
+  label: <tbl-merged-comps>,
 ) 
+])
+]
 
 #figure(
   image("../images/03-ucomps_stacked_0v.png", width: 100%),
-  caption: "Background and signal components"
+  caption: "Background and signal components projected on the u-axis."
 ) 
 #figure(
   image("../images/03-vcomps_stacked_0v.png", width: 100%),
-  caption: "Background and signal components"
+  caption: "Background and signal components projected on the v-axis."
 ) 
 
-== Rotation and Smoothing
+== Rotation and Smoothing <sec:rotation_smoothing>
 
-Since the M2 ROI is a thin diagonal band, we rotate the fit axes by $45 degree$ to minimize binning artifacts at the boundaries. Additionally, we smooth the input spectra after merging to reduce empty bins that makes it harder for the fit to converge.
-
-The rotation transforms the crystal energies, $E_1$ and $E_2$, into $u$ and $v$ axes:
+The diagonal orientation of the M2 ROI introduces binning artifacts at the boundaries by introducing partially included bins. To reduce this effect, the primary crystal energies ($E_1$, $E_2$) are mapped via a $45^(degree)$ rotation into orthogonal $u$ and $v$ coordinates:
 $ u equiv (E_1+E_2)/sqrt(2), quad v equiv (E_1-E_2)/sqrt(2) $
 
-Smoothing employs a $5 times 5$ kernel ('k5b') applied once to the merged histograms using the ROOT `TH2D.Smooth()` function.#footnote[Should we add the smoothed vs non plot comparison?] The kernel weights are shown in <fig-rot-bak-kernel>.
+To prevent sampling failures driven by zero-density bins, the merged background histograms undergo a single pass of a $5 times 5$ smoothing kernel ('k5b') via the ROOT `TH2D.Smooth()` algorithm prior to integration. The kernel weight matrix is detailed in @fig-rot-bak-kernel.
 
 
 
@@ -87,43 +90,30 @@ Smoothing employs a $5 times 5$ kernel ('k5b') applied once to the merged histog
     ),
   ),
   caption: [
-    "Left: rotated background and signal components in the ROI. \\\
-         Right: smoothing kernel ('k5b')."
+    Left: rotated background and signal components in the ROI. \
+         Right: 5x5 smoothing kernel weights ('k5b').
   ]
 )<fig-rot-bak-kernel>
 
-== #ndbd Cutoff
+== #ndbd Cutoff <sec:ndbd_cutoff>
 
-Not all dual-site #ndbd events deposit their full energy in the bolometers; approximately 10% record energies below 2510 keV, creating a low-energy tail. This tail can bias the fit if background features are imperfectly modeled. To mitigate this, we test ignoring the #ndbd tail below specific energy thresholds:
+Approximately 10% of dual-site #ndbd events do not deposit their full energy within the adjacent detectors, generating a low-energy tail ($<2510$ keV) that can bias the likelihood estimation if modeled imperfectly. To evaluate and negate this bias, progressive energy thresholds are tested to exclude the low-energy continuum:
 
-1. No cutoff
-2. $u < 1740 "keV"$: excludes most of the flat region (98.6% efficiency).
-3. $u < 1775 "keV"$: cuts near the X-ray escape peak (95.8% efficiency). #footnote[Validate]
+1. No threshold (100% boundary efficiency).
+2. $u < 1740 "keV"$: Excludes the generic flat continuum region (98.6% efficiency).
+3. $u < 1775 "keV"$: Excludes the continuum up to the X-ray escape peak (95.8% efficiency).
 
-Section 4.2 details the selection of the optimal cutoff.#footnote[Validate later]
+// TODO:? Section 4.2 quantifies the bias reduction to justify the nominal threshold selection.
 
-== Modeling #Co60 sum peak
+== Modeling #Co60 sum peak <sec:co60_modeling>
 
-A key challenge in this analysis is the slight discrepancy between peak shapes in the background model simulations and data. Given the small ROI and few features, even minor lineshape deviations can bias the fit. We observe that the #Co60 sum peak (from 1334 keV and 1173 keV gammas) is reconstructed at slightly higher energies in data than in simulation. This shift is most pronounced when the energy distribution between crystals is asymmetric.#footnote[Update: what else did we check? 2615, DE, SE etc studies, did we check each part of Co too?]
+A systematic difference exists between the #Co60 sum peak (1173 keV and 1334 keV coincidences) reconstructed in data compared to simulations. Minor lineshape deviations in a volume sparse of other features heavily distort fit convergences. Specifically, observed #Co60 sum events reconstruct at marginally higher energies than theoretical predictions, an effect that becomes more pronounced as the energy asymmetry between two depositions increases (see @co-shift-check).
 
-To address this, we exclude regions near individual gamma peaks (minimal efficiency loss) and events with $Delta E = |E_1 - E_2| < 212 "keV"$ (v < 150). For remaining events, we model an energy-dependent shift applied to the primary energy deposit, $E_1$. We marginalize over these shifts manually to evaluate the best fit (see Section 4.2).  #footnote[Add analysis efficiencies as a table]
-
-The shifted energy $E_1 '$ is defined as:
+To correct for this, events within 20 keV of the individual $gamma$ lines ($|E_(1|2) - E_gamma| < 10$)#footnote[abs|E-E_co| > 10, validate] and events presenting nearly symmetric energy distriibution ($Delta E = |E_1 - E_2| < 212 "keV"$, or $v < 150$) are rejected. For remaining events, we model an energy-dependent shift applied to the primary energy deposit, $E_1$#footnote[Add analysis efficiencies as a table].
 
 $ E_1 ' = E_1(1 + Delta), quad Delta in {0, 3, 5, 8, 10, 12, 15} times 10^(-3) $
 
-#figure(
-  grid(
-    rows: 3,
-    column-gutter: 1em,
-    align: left,
-  image("../images/co_shift_check_full.png", width: 100%),
-  image("../images/co_shift_check_g10v150.png", width: 100%),
-  image("../images/co_shift_check_g10v150_inv.png", width: 100%),
-  ),
-
-  caption: "Co60 peak modeling"
-)
+The analysis manually marginalizes over this variable shift to extract the unaffected #ndbd rate (see @methods).
 
 #figure(
   grid(
@@ -133,12 +123,5 @@ $ E_1 ' = E_1(1 + Delta), quad Delta in {0, 3, 5, 8, 10, 12, 15} times 10^(-3) $
     image("../images/co_shift_check_g10v150_vlo.png", width: 100%),
     image("../images/co_shift_check_g10v150_vmid.png", width: 100%)
   ),
-  caption: "Co60 peak modeling"
-)
-
-===
-
-==== TODO
-- surface events? How much do we need to talk about the reasons for the shift?
-- Select the plots above and also add comparison plots of ~2 shifts, none and 1.0?
-- fit input generation appendix?
+  caption: "Co60 peak modeling",
+)<co-shift-check>
