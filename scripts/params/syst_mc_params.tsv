@@ -1,0 +1,2 @@
+task_id	co_shift	command
+1	1.0	python -m qpym2.run.run_syst_mc --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 1.0 --n 500 --draws 8000 --chains 2 --mkchain-samples 100 --output data_2syst/syst_results/mc_results_cs1p0.nc --bias-csv data_2syst/toy_results/bias_merged.csv --xmin-bias 15.0 --save-traces --stat-only

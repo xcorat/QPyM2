@@ -1,0 +1,35 @@
+# Tech Note Environment Configuration
+# Specific paths and settings for 1-ton tech note analysis
+# Extends base environment with tech note specific directories and output paths
+
+extends: "base"
+
+infrastructure:
+  # Override base paths for tech note specific directories
+  output_paths:
+    staging_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging_1ton_v2"
+    # Fit outputs are organized by model under M2v5Fits/tn_1ton/model_*/
+    # Canonical key is 'fit_dir' (used across qpym2 run scripts); keep value from previous fit_base_dir
+    fit_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2/data/M2v5Fits/tn_1ton"
+    plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2/data/M2v5Fits/plots_tn1ton"
+    systematic_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2/data/M2v5Fits/sys_tn1ton"
+    
+  # Tech note specific data files and patterns
+  data_files:
+    # Inherit jags_output and reduced_data from base
+    # Model-specific files are in {fit_base_dir}/model_{params}/
+    fit_input_pattern: "input.h5"      # File pattern for fit inputs
+    fit_result_pattern: "fit.h5"       # File pattern for fit results
+    fit_trace_pattern: "fit.nc"        # File pattern for MCMC traces
+    
+  # Tech note specific naming conventions
+  naming_conventions:
+    # Inherit from base
+    analysis_name: "tmp"
+    staging_prefix: "tmp"
+    model_dir_pattern: "model_{co_cut}_{ndbd_cutoff}_{co_shift}"  # Pattern for model directories
+
+# Tech note specific system settings (if needed)
+system:
+  # Inherit from base, override if needed
+  verbose_logging: true  # Enable more detailed logging for tech note

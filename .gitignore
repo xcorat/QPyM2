@@ -23,8 +23,11 @@ dist/
 # Project outputs
 output/
 data/
-notebooks/
+notebooks/*
 tmp/
+
+# Keep agent guidance for the scratch notebooks area tracked
+!notebooks/AGENTS.md
 
 # Editor/OS noise
 .vscode/

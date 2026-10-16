@@ -4,10 +4,12 @@ Provide functionality to read background model related input (JAGS output and MC
 """
 
 import os
+
 import numpy as np
 import pandas as pd
 
-from qpym2.utils.stats import get_mode
+from qpym2.utils.logging import debug
+from qpym2.utils.mathy import get_mode
 
 
 def read_bmsyst_corrmat(fpath: str = None) -> pd.DataFrame:

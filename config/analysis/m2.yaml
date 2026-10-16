@@ -8,8 +8,8 @@ defaults:
 
 # Override specific model for tech note
 models:
-  m2uv:
-    name: "m2uv"
+  m2uv_150:
+    name: "m2uv_150"
     roi:
       esum_max: 2570
       esum_min: 2400

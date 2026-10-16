@@ -1,0 +1,13 @@
+task_id	co_cut	ndbd_cutoff	co_shifts	command
+1			0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+2		u1775	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+3		u1740	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+4	gamma10		0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10 --ndbd-cutoff None --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+5	gamma10	u1775	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10 --ndbd-cutoff u1775 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+6	gamma10	u1740	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10 --ndbd-cutoff u1740 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+7	v150		0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut v150 --ndbd-cutoff None --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+8	v150	u1775	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut v150 --ndbd-cutoff u1775 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+9	v150	u1740	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut v150 --ndbd-cutoff u1740 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+10	gamma10_v150		0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+11	gamma10_v150	u1775	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5
+12	gamma10_v150	u1740	0.0 0.3 0.5 0.8 1.0 1.2 1.5	python qpym2/run/run_create_input.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shifts 0.0 0.3 0.5 0.8 1.0 1.2 1.5

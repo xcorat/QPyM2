@@ -1,0 +1,22 @@
+# Tech Note 1-ton model configuration
+# Extends base model with tech note specific parameters
+
+extends: "base"
+
+# Override specific model for tech note
+models:
+  tech_note_200:
+    name: "tmp"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+    
+    # Tech note specific cuts
+    cuts:
+      ndbd_cuts: "u>1775"
+      roi_cuts: "esum>=2400 && esum<=2570"
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 1

@@ -1,0 +1,37 @@
+name: xqpy
+channels:
+  - conda-forge
+  # - defaults
+dependencies:
+  - python>=3.10
+  # core scientific stack
+  - numpy>=2.0
+  - pandas
+#  - scipy #>=1.13
+#  - numba
+#  - matplotlib
+  # # - seaborn
+#  - xarray
+  # # HDF5 / file I/O
+  - h5py
+  # # - h5netcdf
+  # # - netcdf4
+#  - pytables
+  # # Bayesian / fitting
+#  - pymc>=5.25
+  # # - arviz>=0.19
+  # # config
+  - pyyaml>=6.0
+  - hydra-core
+  - omegaconf
+  # # - pyrsistent
+  # # CERN ROOT (conda-forge build; omit if using a system/module install)
+  - root
+  # # dev / test
+  # - pytest>=6.0
+  - psutil
+  - ipykernel
+  - jupyter
+  - pip
+  - pip:
+      - -e .   # installs qpym2 itself in editable mode

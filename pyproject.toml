@@ -1,0 +1,26 @@
+# Tooling configuration only.
+# Build/packaging is still driven by setup.py; do not add [project] or
+# [build-system] here without migrating packaging to pyproject.toml.
+
+[tool.pytest.ini_options]
+testpaths = ["qpym2"]
+# Default to the pure tests; CI/sandbox runs without NERSC data.
+# Override explicitly with: pytest -m integration
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a configured environment and real NERSC data under /global/...",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+respect-gitignore = true
+extend-exclude = ["*.bak", "*.old", "*.remove"]
+
+[tool.ruff.lint]
+# Conservative: pyflakes + a few pycodestyle error classes. Avoid a noisy
+# first run on a codebase with no prior linter.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.format]
+quote-style = "preserve"

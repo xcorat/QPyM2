@@ -1,0 +1,37 @@
+# @package _global_
+# Tech Note 1-ton model configuration
+# For Hydra, select via CLI: analysis=tech_note
+
+# Hydra defaults - load base first
+defaults:
+  - models_base
+
+# Background component groupings for fit
+# Each entry defines a group of MC sources merged into one fit component.
+# filter_regex: include sources matching this regex
+# filter_regex_inverse: include sources NOT matching this regex
+components:
+  - name: co60
+    filter_regex: "60Co"
+  - name: u238
+    filter_regex: "238U|210Pb"
+  - name: others
+    filter_regex_inverse: "60Co|238U|210Pb"
+
+# Override specific model for tech note
+models:
+  tech_note_200:
+    name: "hmu_tech_note"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 1
+
+    # Higher threshold specific cuts
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove

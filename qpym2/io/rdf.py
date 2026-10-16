@@ -1,5 +1,4 @@
-from ROOT import RDataFrame as RDF
-from ROOT import TChain
+from qpym2.utils.logging import debug
 
 def read_rdf(fname, treename, defs=[], filters=[], add_friends=[]):
     """ Read a ROOT file and return the RDataFrame. Implements the branch
@@ -16,6 +15,8 @@ def read_rdf(fname, treename, defs=[], filters=[], add_friends=[]):
     Returns:
         RDataFrame: the RDataFrame object.
     """
+    from ROOT import RDataFrame as RDF
+    from ROOT import TChain
 
     if add_friends and len(add_friends) > 0:
         tc = TChain(treename)
@@ -40,18 +41,27 @@ def read_rdf(fname, treename, defs=[], filters=[], add_friends=[]):
 
     return rdf
 
-def write_rdf(rdf, output_treename, output_fname, output_cols):
-    """
-    Write the RDataFrame to a ROOT file.
+def create_rdf(input_fname, input_treename, output_fname, output_treename,
+               defs=[], filters=[] , transforms=[], output_cols=[], input_add_friends=[]):
+    """ Create a ROOT file with the RDataFrame. Implements the branch
+    definitions and filters.
 
     Args:
-        rdf (RDataFrame): the RDataFrame object.
-        output_treename (str): name of the output tree.
+        input_fname (str): path to the ROOT file.
+        input_treename (str): name of the tree.
         output_fname (str): path to the output ROOT file.
-        output_cols (list of str): list of columns to be saved in the output tree.
-
-    Returns:
-        RDataFrame: the RDataFrame object after writing.
+        output_treename (str): name of the output tree.
+        defs (list of (alias, def)): list of branch definitions.
+        filters (list of string): list of filters. 
+        output_cols (list of string): list of columns to be saved in the output
+            tree. 
+        input_add_friends (list of (fname, treename)): list of friend trees to be added.
+            while reading the input. If fname is None, use the same file.
     """
-    out_rdf = rdf.Snapshot(output_treename, output_fname, output_cols)
-    return out_rdf
+    try:
+        rdf = read_rdf(input_fname, input_treename, defs, filters, add_friends=input_add_friends)
+        out_rdf = rdf.Snapshot(output_treename, output_fname, output_cols)
+        n_final = out_rdf.Count().GetValue()
+        print(f"[staging] final events: {n_final}  -> {output_fname}")
+    except Exception as e:
+        debug("Error while creating the RDataFrame: {}".format(e))

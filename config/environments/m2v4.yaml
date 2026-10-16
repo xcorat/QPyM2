@@ -1,0 +1,28 @@
+# @package _global_
+# M2v4 Environment Configuration
+# Small environment config for testing against M2v4Fits archive
+# Use via: environment=m2v4
+
+defaults:
+  - base
+
+infrastructure:
+  output_paths:
+    # Point fit_dir to the M2v4Fits scratch archive
+    fit_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/M2v4Fits/tn_1ton"
+    # staging_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/M2v4Fits/staging"
+    plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data/tech_note/plots"
+    # systematic_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging_syst_test"
+    # 
+
+  data_files:
+    fit_input_pattern: "input.h5"
+    fit_result_pattern: "fit.h5"
+    fit_trace_pattern: "fit.nc"
+
+  naming_conventions:
+    # analysis_name: "m2v4"
+    model_dir_pattern: "model_{co_cut}_{ndbd_cutoff}_{co_shift}"
+
+system:
+  verbose_logging: false

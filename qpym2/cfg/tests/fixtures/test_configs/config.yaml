@@ -1,9 +1,0 @@
-# Minimal master config for tests.
-defaults:
-  - environments: base
-  - analysis: models_base
-  - _self_
-
-pipeline:
-  name: "test"
-  version: "0.0"

@@ -1,0 +1,43 @@
+task_id	seed	co_cut	ndbd_cutoff	co_shift	fit_type	rep	command
+1	0			0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+2	0			0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+3	0			0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+4	0			0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+5	0			1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+6	0			1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+7	0			1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff None --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst
+8	0		u1740	0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+9	0		u1740	0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+10	0		u1740	0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+11	0		u1740	0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+12	0		u1740	1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+13	0		u1740	1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+14	0		u1740	1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1740 --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst
+15	0		u1775	0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+16	0		u1775	0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+17	0		u1775	0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+18	0		u1775	0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+19	0		u1775	1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+20	0		u1775	1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+21	0		u1775	1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut None --ndbd-cutoff u1775 --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst
+22	0	gamma10_v150		0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+23	0	gamma10_v150		0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+24	0	gamma10_v150		0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+25	0	gamma10_v150		0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+26	0	gamma10_v150		1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+27	0	gamma10_v150		1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+28	0	gamma10_v150		1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff None --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst
+29	0	gamma10_v150	u1740	0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+30	0	gamma10_v150	u1740	0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+31	0	gamma10_v150	u1740	0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+32	0	gamma10_v150	u1740	0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+33	0	gamma10_v150	u1740	1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+34	0	gamma10_v150	u1740	1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+35	0	gamma10_v150	u1740	1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst
+36	0	gamma10_v150	u1775	0.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 0.0 --chains 8 --draws 20000 --prior-width 2syst
+37	0	gamma10_v150	u1775	0.3	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 0.3 --chains 8 --draws 20000 --prior-width 2syst
+38	0	gamma10_v150	u1775	0.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 0.5 --chains 8 --draws 20000 --prior-width 2syst
+39	0	gamma10_v150	u1775	0.8	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 0.8 --chains 8 --draws 20000 --prior-width 2syst
+40	0	gamma10_v150	u1775	1.0	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 1.0 --chains 8 --draws 20000 --prior-width 2syst
+41	0	gamma10_v150	u1775	1.2	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 1.2 --chains 8 --draws 20000 --prior-width 2syst
+42	0	gamma10_v150	u1775	1.5	fit	0	python qpym2/run/run_single_fit.py --environment m2v5-1 --analysis tech_note --co-cut gamma10_v150 --ndbd-cutoff u1775 --co-shift 1.5 --chains 8 --draws 20000 --prior-width 2syst

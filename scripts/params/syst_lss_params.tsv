@@ -1,0 +1,2 @@
+task_id	co_shift	command
+1	1.0	python -m qpym2.run.run_syst_lss dq --environment m2v5-1 --analysis tech_note --lss-data-path /global/homes/x/xcorat/Software/cuore-nersc-modern_v4.0.0/cuoremc/ares/data/Nature2021 --co-cut gamma10_v150 --ndbd-cutoff u1740 --co-shift 1.0 --draws 8000 --chains 2 --mkchain-samples 100 --output-dir data_2syst/syst_results --pm1 --bias-csv data_2syst/toy_results/bias_merged.csv --xmin-bias 15.0 --save-traces

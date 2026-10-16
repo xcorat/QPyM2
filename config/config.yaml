@@ -2,7 +2,6 @@
 # Hydra composition: loads defaults from each config tier
 
 # Hydra framework settings
-# TODO: are these used at all?
 hydra:
   job:
     chdir: false
@@ -15,16 +14,11 @@ hydra:
 defaults:
   - environments: base         # Tier 1: Infrastructure (paths, system)
   - analysis: models_base      # Tier 2: Physics models (cuts, ROI, binning)
+  - hyperparams: base          # Tier 3: Systematic variations (co_shift, etc.)
+  - toys: base                 # Tier 4: Toy study parameters (optional)
   - _self_
 
 # Pipeline metadata (for runner scripts)
 pipeline:
   name: "qpym2"
-  version: "2.0"
-
-# Logging configuration (applied by main() entry points via logging.basicConfig)
-logging:
-  level: DEBUG
-  format: "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
-  log_dirpath: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/output/logs"  # if non-empty, tee logs to <log_dirpath>/<script>_<timestamp>.log
-  quiet_others: true  # if true, third-party loggers (numba, matplotlib, etc.) stay at WARNING
+  version: "1.0"

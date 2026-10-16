@@ -1,0 +1,27 @@
+# @package _global_
+# Environment for threshold=250 keV systematic fits.
+# Paired with analysis=tech_note_250.
+# Identical to m2v5-1.yaml except fit_dir points to data_2syst/fits_250/
+# so outputs never collide with the threshold=200 nominal fits.
+
+defaults:
+  - base
+
+infrastructure:
+  output_paths:
+    data_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_2syst"
+    fit_dir:  "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_2syst/fits_250"
+    plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_2syst/plots"
+    logs_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_2syst/logs"
+
+  data_files:
+    fit_input_pattern: "input.h5"
+    fit_result_pattern: "fit.h5"
+    fit_trace_pattern: "fit.nc"
+    lss_data_path: "/global/homes/x/xcorat/Software/cuore-nersc-modern_v4.0.0/cuoremc/ares/data/Nature2021"
+
+  naming_conventions:
+    analysis_name: "m2v5"
+
+system:
+  verbose_logging: false

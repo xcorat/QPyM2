@@ -1,0 +1,57 @@
+# @package _global_
+# Tech Note 1-ton model configuration
+# For Hydra, select via CLI: analysis=tech_note
+
+# Hydra defaults - load base first
+defaults:
+  - models_base
+
+# Override specific model for tech note
+models:
+  tech_note_200:
+    name: "hmu_tech_note"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 2.5
+
+    # Higher threshold specific cuts
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  tech_note_250:
+    name: "hmu_tech_note_250"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 250
+      shift_padding: 10
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 1
+
+    # Higher threshold specific cuts
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  tech_note_150:
+    name: "hmu_tech_note_150"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 150
+      shift_padding: 10
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 1
+
+    # Higher threshold specific cuts
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove

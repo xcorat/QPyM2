@@ -1,0 +1,26 @@
+# Batch Toy Configuration for m2_2700 analysis
+# Same as batch.yaml but output routed to data_2700/
+
+bias:
+  min: 5
+  max: 200
+
+output:
+  csv: "data_2700/toy_results/toys_batch_{type}.csv"
+  logs: "logs/toy_batch_{type}.log"
+  append: true
+
+model_grid:
+  co_cuts:
+    - gamma10_v150
+  ndbd_cutoff:
+    - u1740
+    - u1775
+  co_shift:
+    - 0.0
+    - 0.3
+    - 0.5
+    - 0.8
+    - 1.0
+    - 1.2
+    - 1.5

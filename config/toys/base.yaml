@@ -1,0 +1,22 @@
+# Base Toy Configuration
+# Default parameters for interactive toy fit runs
+
+# Bias study signal injection ranges (counts)
+bias:
+  min: 5        # Minimum injected signal counts
+  max: 200      # Maximum injected signal counts (null = 2x posterior mean)
+
+# Output configuration
+output:
+  csv: "data/toy_results/toys_interactive.csv"      # CSV output path
+  logs: "logs/toy_batch_interactive.log"            # Optional log path (only used with --log-file flag)
+  append: true                                       # Append to existing files (false = fail on exist)
+
+# Model parameter grid (minimal for interactive use)
+model_grid:
+  co_cuts:           # Co-60 calibration cut selections
+    - gamma10_v150   # Default: combined gamma-10 + v150 cut
+  ndbd_cutoff:       # Signal region cutoff selections  
+    - u1740          # Default: u1740 cutoff
+  co_shift:          # Co-60 energy shifts (keV)
+    - 1.0            # Default: 1.0 keV shift

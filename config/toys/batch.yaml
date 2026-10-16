@@ -1,0 +1,31 @@
+# Batch Toy Configuration
+# Parameter grids and job specifications for batch toy fit runs
+
+# Bias study signal injection ranges (counts)
+bias:
+  min: 5        # Minimum injected signal counts
+  max: 200      # Maximum injected signal counts (null = 2x posterior mean)
+
+# Output configuration
+output:
+  csv: "data_2syst/toy_results/toys_batch_{type}.csv"     # CSV output path (use {type} for fit type)
+  logs: "data_2syst/logs/toy_batch_{type}.log"                 # Optional log path (only used with --log-file flag)
+  append: true                                       # Append to existing files (false = fail on exist)
+
+# Model parameter grid (full scan for batch runs)
+model_grid:
+  co_cuts:           # Co-60 calibration cut selections
+    - gamma10_v150   # Default: combined gamma-10 + v150 cut
+    # - v150           # v150 cut only
+  ndbd_cutoff:       # Signal region cutoff selections  
+    - u1740          # Default: u1740 cutoff
+    - u1775          # Alternative: u1775 cutoff
+    # - None           # No alternative cutoff (use config default)
+  co_shift:          # Co-60 energy shifts (keV) for systematic scan
+    - 0.0
+    - 0.3
+    - 0.5
+    - 0.8
+    - 1.0
+    - 1.2
+    - 1.5

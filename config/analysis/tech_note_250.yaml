@@ -1,0 +1,53 @@
+# @package _global_
+# Tech Note threshold=250 keV model configuration
+# Identical to tech_note.yaml but with tech_note_250 as the first (default) model.
+# Use via: --analysis tech_note_250 --environment m2v5-1-250
+#
+# The paired environment (m2v5-1-250) points fit_dir to data_2syst/fits_250/
+# so output directories never collide with the threshold=200 nominal fits.
+
+defaults:
+  - models_base
+
+models:
+  tech_note_250:
+    name: "hmu_tech_note_250"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 250
+      shift_padding: 10
+
+    binning:
+      bin_size: 1
+
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  tech_note_200:
+    name: "hmu_tech_note"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+
+    binning:
+      bin_size: 1
+
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  tech_note_150:
+    name: "hmu_tech_note_150"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 150
+      shift_padding: 10
+
+    binning:
+      bin_size: 1
+
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove

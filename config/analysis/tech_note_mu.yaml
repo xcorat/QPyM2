@@ -1,0 +1,67 @@
+# @package _global_
+# Tech Note 1-ton model configuration
+# For Hydra, select via CLI: analysis=tech_note
+
+# Hydra defaults - load base first
+defaults:
+  - models_base
+
+components:
+  - name: co60
+    filter_regex: "60Co"
+  - name: u238
+    filter_regex: "238U|210Pb"
+  - name: mu
+    filter_regex: "Muons"
+  - name: others
+    filter_regex_inverse: "60Co|238U|210Pb|Muons"
+
+# Override specific model for tech note
+models:
+  tn_mu_200:
+    name: "hmu_tn_mu"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+    
+    # Calculated binning ranges
+    binning:
+      bin_size: 1
+
+    # Higher threshold specific cuts
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  # tech_note_250:
+  #   name: "hmu_tech_note_250"
+  #   roi:
+  #     esum_max: 2570
+  #     esum_min: 2400
+  #     threshold: 250
+  #     shift_padding: 10
+    
+  #   # Calculated binning ranges
+  #   binning:
+  #     bin_size: 1
+
+  #   # Higher threshold specific cuts
+  #   cuts:
+  #     roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove
+
+  # tech_note_150:
+  #   name: "hmu_tech_note_150"
+  #   roi:
+  #     esum_max: 2570
+  #     esum_min: 2400
+  #     threshold: 150
+  #     shift_padding: 10
+    
+  #   # Calculated binning ranges
+  #   binning:
+  #     bin_size: 1
+
+  #   # Higher threshold specific cuts
+  #   cuts:
+  #     roi_cuts: "esum>=2515 && esum<=2535"  # Narrow ROI remove

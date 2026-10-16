@@ -1,0 +1,25 @@
+# Base Hyperparameter Configuration
+# All defaults - no systematic variations applied
+# Override individual values via CLI: python script.py hyperparams.co_shift=0.5
+
+# Co-60 calibration region cut selection
+# Value is key into cuts.co_cuts (null, v150, gamma10, gamma10_v150)
+co_cuts: null
+
+# Signal region cut override
+# Value is key for alternative ndbd_cutoff (null, u1740, u1775)
+ndbd_cutoff: null
+
+# Energy scale systematics (keV)
+co_shift: 0.0
+ndbd_shift: 0.0
+
+# Data selection options
+blinded: true
+skip_roi: null  # null or [min, max] to exclude ROI region
+
+# Processing options
+smooth: true
+
+# MCMC sampling (for validation studies)
+sample_mkchain: 0

@@ -1,0 +1,5 @@
+# Bias Study Preset
+# Unblinded analysis with ROI exclusion for bias characterization
+
+blinded: false
+skip_roi: [2450, 2500]  # Exclude signal region for bias studies

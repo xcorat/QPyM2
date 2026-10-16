@@ -1,0 +1,27 @@
+# @package _global_
+# M2v4 Environment Configuration
+# Small environment config for testing against M2v4Fits archive
+# Use via: environment=m2v4
+
+defaults:
+  - base
+
+infrastructure:
+  output_paths:
+    # Base results directory — plots_dir, systematic_dir, toy_results_dir are derived from this
+    data_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_3comp"
+    fit_dir:  "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_3comp/fits"
+    plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2_v5.1/QPyM2/data_3comp/plots"
+
+  data_files:
+    fit_input_pattern: "input.h5"
+    fit_result_pattern: "fit_systprior.h5"
+    fit_trace_pattern: "fit_systprior.nc"
+    lss_data_path: "/global/homes/x/xcorat/Software/cuore-nersc-modern_v4.0.0/cuoremc/ares/data/Nature2021"
+
+  naming_conventions:
+    analysis_name: "m2v5"
+    # model_dir_pattern: "model_{co_cut}_{ndbd_cutoff}_{co_shift}"
+
+system:
+  verbose_logging: false

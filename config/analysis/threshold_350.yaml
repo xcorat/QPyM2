@@ -1,0 +1,23 @@
+# @package _global_
+# Threshold 350 keV model configuration
+# For Hydra, select via CLI: analysis=threshold_350
+
+# extends: base  # Handled by Hydra defaults list
+
+# Override for 350 keV threshold analysis
+models:
+  threshold_350:
+    name: "hmu_350"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 350
+    
+    # Higher threshold specific cuts
+    cuts:
+      ndbd_cuts: "u>1740"  # Different cut for higher threshold
+      roi_cuts: "esum>=2400 && esum<=2570"  
+    
+    # Calculated binning ranges for 350 keV
+    binning:
+      bin_size: 1
