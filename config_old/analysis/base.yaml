@@ -1,0 +1,17 @@
+# @package _global_
+# Base Analysis Configuration
+# This file defines analysis-specific parameters, cuts, and model configurations
+# Infrastructure/environment settings are in config/environments/
+
+# Basic analysis configuration
+run_info:
+  description: "Base analysis configuration for M2 analysis"
+  
+# # Common analysis cuts used across models
+# # analysis_cuts:
+# #   multiplicity: "Multiplet[0] == 2"
+  
+# # Data selection criteria
+# data_selection:
+#   exclude_datasets: []
+#   exclude_channels: []

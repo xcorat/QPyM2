@@ -1,0 +1,62 @@
+# @package _global_
+# Base Environment Configuration
+# Core infrastructure: paths, directories, file patterns, system settings
+# NO MODEL-SPECIFIC PARAMETERS HERE
+
+infrastructure:
+  # Core project paths - environment independent
+  directories:
+    # scratch_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
+    # home_dir: "/global/homes/x/xcorat"
+    bm_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/BM_1ton"
+    
+    # Data source directories
+    # ares_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/ares"
+    # Directory with 0vbb simulations
+    ndbd_mc_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/ares/0vbb"
+    # Directory with background monte-carlo simulations
+    bkg_mc_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/BM_1ton/out_ares"
+
+  # Output paths
+  output_paths:
+    staging_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging"
+    # fit_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/M2Fits_v5.1/fits"
+    data_dir: null          # Base results directory; if set, plots/syst_results/toy_results are derived from it
+    plots_dir: null         # Explicit override; otherwise derived from data_dir/plots or fit_dir/plots
+    toy_results_dir: null   # Explicit override; otherwise derived from data_dir/toy_results
+    # systematic_dir: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/M2Fits_v5.1/systematic"
+
+  # Data files
+  data_files:
+    # Directory with the CUORE reduced file for data.
+    jags_output: "/global/cfs/projectdirs/cuore/scratch/xcorat/data/BM_1ton/fit/Output/default/Out.h5"
+    reduced_data: "Reduced_1ton.root"
+    bkg_syst_corrmat: "/global/homes/x/xcorat/Software/QPyM2/BM_corrmat_stef/CorrelationMatrix.csv"
+    # LSS lineshape data (per-dataset ROOT files)
+    lss_data_path: null
+
+  # File patterns for MC and data
+  file_patterns:
+    ndbd_pattern: "0vbb_1M_*.root"
+    # reduced_fname: "Reduced_1ton.root"
+
+  # File naming conventions
+  naming_conventions:
+    ndbd_staging: "ndbd"
+    data_name: "data"
+    data_blinded_name: "data_blinded"
+    input_name: "input"
+    input_noroi_name: "input_noroi"
+
+# QRoot configuration - file reading parameters
+qroot:
+  tree_name: "outTree"
+  energy_var: "Energy" 
+  esum_var: "TotalEnergy"
+  channel_vars: ["Channel", "Multiplet[1]"]
+  output_tree_name: "uvtree"
+  output_columns: ["u0", "v0", "ch1", "ch2", "ds", "t"]
+
+# System settings
+system:
+  matplotlib_backend: "Agg"

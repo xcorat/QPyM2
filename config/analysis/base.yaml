@@ -1,17 +1,27 @@
 # @package _global_
-# Base Analysis Configuration
-# This file defines analysis-specific parameters, cuts, and model configurations
-# Infrastructure/environment settings are in config/environments/
+# Base Analysis & Physics Conventions
+# Defines default MC component groupings and standard cut definitions
 
-# Basic analysis configuration
-run_info:
-  description: "Base analysis configuration for M2 analysis"
-  
-# # Common analysis cuts used across models
-# # analysis_cuts:
-# #   multiplicity: "Multiplet[0] == 2"
-  
-# # Data selection criteria
-# data_selection:
-#   exclude_datasets: []
-#   exclude_channels: []
+# Default background component groupings for fits.
+# Models can inherit these or override them with alternative groupings.
+components:
+  - name: co60
+    filter_regex: "60Co"
+  - name: u238
+    filter_regex: "238U|210Pb"
+  - name: th232
+    filter_regex: "232Th|208Pb"
+  - name: others
+    filter_regex_inverse: "60Co|238U|210Pb|232Th|208Pb"
+
+cuts:
+  base_cuts: "true"
+  data_cuts: "PCA && Validation && cutsTree.Included && cutsTree.FullMultiplet"
+  mc_cuts: "true"
+  co_cuts:
+    v150: "v>150"
+    gamma10: "abs(e1-1334)>10 && abs(e2-1173)>10"
+    gamma10_v150: "abs(e1-1334)>10 && abs(e2-1173)>10 && v>150"
+  ndbd_cutoff:
+    u1740: "u>1740"
+    u1775: "u>1775"

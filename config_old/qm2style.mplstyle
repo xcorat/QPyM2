@@ -1,0 +1,68 @@
+# PHYSICS & HEP POSTER MATPLOTLIB STYLE
+# Combines clean aesthetics of SciencePlots with HEP layout standards
+
+# --- Figure and Canvas Layout ---
+figure.figsize:     8, 6          # Standard landscape proportion
+figure.dpi:         300           # High resolution for poster printing
+figure.facecolor:   white
+figure.edgecolor:   white
+figure.subplot.left:   0.14       # Ample margin spacing to prevent
+figure.subplot.bottom: 0.14       # axis labels from being cut off
+figure.subplot.right:  0.95
+figure.subplot.top:    0.92
+
+# --- Typography & LaTeX Math ---
+# Ensures crisp, uniform LaTeX fonts across all elements
+font.family:        serif
+font.serif:         Computer Modern Roman, Times New Roman, DejaVu Serif
+#text.usetex:        True          # Renders all text via LaTeX system
+axes.labelsize:     14            # Large, highly legible font sizes
+axes.titlesize:     16            # for physical poster viewing
+xtick.labelsize:    12
+ytick.labelsize:    12
+legend.fontsize:    12
+legend.title_fontsize: 12
+
+# --- Axes & Grid Layout ---
+axes.facecolor:     white
+axes.edgecolor:     black
+axes.linewidth:     1.2
+axes.grid:          False         # HEP plots generally omit grids
+axes.axisbelow:     True          # Grid/ticks sit beneath data structures
+
+# --- High Energy Physics Ticks ---
+# Replicates the distinctive four-sided, inward-pointing HEP look
+xtick.top:          True          # Ticks on top axis box
+xtick.bottom:       True          # Ticks on bottom axis box
+xtick.direction:    in            # Point ticks inside the plot area
+xtick.major.size:   6             # Pronounced major ticks
+xtick.major.width:  1.2
+xtick.minor.size:   3             # Clear minor ticks
+xtick.minor.width:  0.8
+xtick.minor.visible: True
+
+ytick.left:          True          # Ticks on left axis box
+ytick.right:         True          # Ticks on right axis box
+ytick.direction:    in            # Point ticks inside the plot area
+ytick.major.size:   6
+ytick.major.width:  1.2
+ytick.minor.size:   3
+ytick.minor.width:  0.8
+ytick.minor.visible: True
+
+# --- Data Representations ---
+lines.linewidth:    1.8           # Bolder lines for poster visibility
+lines.markersize:   5             # Visible data marker points
+patch.linewidth:    1.2           # Histogram outline width
+
+# --- Color Palette (Science/HEP Cycler) ---
+# High-contrast, colorblind-friendly academic color sequence
+axes.prop_cycle: cycler('color', ['004488', 'D55E00', '009E73', 'CC79A7', 'E69F00', '56B4E9'])
+
+# --- Legend Styling ---
+legend.frameon:     True          # Container box for legibility
+legend.framealpha:  1.0           # Fully opaque background
+legend.facecolor:   white
+legend.edgecolor:   black
+legend.fancybox:    False         # Sharp, professional corners
+legend.loc:         best

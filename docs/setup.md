@@ -2,52 +2,61 @@
 
 ## Setup conda environment
 
-1. Create conda environment using the environment.yml file
-    `mamba env create -f environment.yml`
+The local environment is managed using **micromamba** with packages installed under `/data/cuore/conda`.
 
-    *If the base environment doesn't have mamba, create and install mamba prior, and then update,*
-    `conda create -n xqpy mamba -y`
-    `conda activate xqpy`
-    `mamba env update -f environment.yml`
+### 1. Create micromamba environment
+```bash
+export MAMBA_ROOT_PREFIX=/data/cuore/conda
+export XDG_CACHE_HOME=/data/cuore/conda/cache
+/data/cuore/bin/micromamba create -f environment.yml -y
+```
 
-2. Activate conda environment
-    `conda activate xqpy`
+### 2. Activate environment
+In each new shell:
+```bash
+source ./activate.sh
+```
 
-    The package itself is installed editable via `environment.yml`
-    (`pip: -e .`). To install manually: `pip install -e .`.
+Or manually:
+```bash
+export MAMBA_ROOT_PREFIX=/data/cuore/conda
+export XDG_CACHE_HOME=/data/cuore/conda/cache
+eval "$(/data/cuore/bin/micromamba shell hook --shell bash)"
+micromamba activate qpym2
+```
 
-3. Validate
-    + `python -c "import ROOT; h = ROOT.TH1F('test', 'test', 10, 0, 10); print('PyROOT works!')"`
+The package itself is installed editable (`pip install -e .`).
+
+### 3. Validate
+```bash
+python -c "import ROOT, pymc, qpym2; print('PyROOT works! ROOT version:', ROOT.gROOT.GetVersion(), 'PyMC:', pymc.__version__)"
+```
 
 ## Required dependencies
 
-The core analysis code additionally needs packages that are not all declared in
-`setup.py`: **PyTables** (`tables`, used by `pandas.to_hdf/read_hdf`),
-**xarray**, **netcdf4**, and **h5py**. PyMC/PyTensor/ArviZ are required for
-fitting. If an import fails at runtime, check these first.
+The core analysis code uses dependencies declared in `environment.yml`:
+**PyTables** (`tables`), **xarray**, **netcdf4**, **h5py**, and **PyMC / PyTensor / ArviZ**.
 
 ## Running tests
 
 ```bash
-# Pure tests — no data or ROOT required
+# Pure tests — no external data or ROOT required (67 passing tests)
 pytest -m "not integration"
 
 # Integration tests — require the configured environment and NERSC data
 pytest -m integration
 ```
 
-Some tests are currently known-broken (see the Testing section of
-[`AGENTS.md`](../AGENTS.md)); a full test run may error at collection until
-those are fixed.
-
 ## Smoke test
 
-Run one stage locally before submitting to SLURM (activate `xqpy` first):
+Run one stage locally before submitting to SLURM (activate environment first):
 
 ```bash
-python -m qpym2.run.run_create_staging -e m2v5-1 -a tech_note
-python -m qpym2.run.run_create_input   -e m2v5-1 -a tech_note
-python -m qpym2.run.run_single_fit -e m2v5-1 -a tech_note \
+source ./activate.sh
+
+python -m qpym2.run.run_create_staging -e local
+python -m qpym2.run.run_create_input   -e local
+python -m qpym2.run.run_single_fit -e local \
     --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000
 ```
 

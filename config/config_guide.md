@@ -1,129 +1,110 @@
-# QPyM2 Configuration Guide
+# QPyM2 Configuration Guide (v0.6)
 
-This guide documents how configuration actually works in QPyM2. It reflects the
-live Hydra layout in `config/`. (An earlier version of this file described an
-aspirational `extends:` / `tools/*.yml` scheme that was never implemented.)
+This guide documents the modern configuration architecture in QPyM2. It reflects the 4-tier Hydra layout in `config/` designed to decouple execution environments, data contracts, and physical modeling.
 
-## Architecture
+---
 
-QPyM2 uses **Hydra + OmegaConf**, loaded **programmatically** via the compose
-API — not through the `@hydra.main` decorator and not exposed as CLI config
-flags. The master file is `config/config.yaml`, which composes four tiers:
+## 1. Architecture
+
+QPyM2 uses **Hydra + OmegaConf**, loaded **programmatically** via `qpym2.cfg.hydra_adapter_new.HydraConfigManager` (or `qpym2.cfg.hydra_adapter`). The entry point is `config/config.yaml`, which composes four orthogonal tiers:
 
 ```yaml
 # config/config.yaml
+pipeline_version: "0.6.0"
+
 defaults:
-  - environments: base     # Tier 1: infrastructure (paths, system, qroot)
-  - analysis: models_base  # Tier 2: physics (models, ROI, cuts, binning)
-  - hyperparams: base      # Tier 3: systematic selections/overrides
-  - toys: base             # Tier 4: toy-study grid
+  - environments: local   # Tier 1: System infrastructure, data roots, output paths
+  - staging: default      # Tier 2: Staging data contract (cuts, input patterns)
+  - analysis: base        # Tier 3: Physics baseline (cuts dictionary, component groupings)
+  - models: tech_note     # Tier 4: Named statistical fit models & ROI
   - _self_
 ```
 
-All tiers use `@package _global_` and the `.yaml` extension.
+All tier files use `@package _global_` and standard `.yaml` extensions.
 
-| Tier | Directory | Contains | Example names |
+| Tier | Directory | Scope | Example Targets |
 |---|---|---|---|
-| Environment | `config/environments/` | Absolute paths, `qroot` read config, `system` | `base`, `tech_note`, `nersc`, `m2v5-1`, `m2v5-1-250` |
-| Analysis | `config/analysis/` | `models.*` ROI/threshold/binning, `cuts.*`, `components` | `models_base`, `tech_note`, `m2`, `m2_2700` |
-| Hyperparams | `config/hyperparams/` | `co_cuts`, `ndbd_cutoff`, `co_shift`, `ndbd_shift`, `blinded`, `skip_roi`, `smooth` | `base`, `bias_study`, `tech_note`, `m2uv` |
-| Toys | `config/toys/` | Bias range, output paths, `model_grid` | `base`, `batch` (see `toys/README.md`) |
+| **Environment** | `config/environments/` | Machine paths, data roots, storage paths, system settings | `base`, `local`, `nersc` |
+| **Staging** | `config/staging/` | Raw data matching, filtering, preselection cut contract | `default` |
+| **Analysis** | `config/analysis/` | Baseline physics definitions, standard cut alternatives | `base` |
+| **Models** | `config/models/` | Named model configurations (ROI, threshold, bin size) | `tech_note` |
 
-The tiers are selected by name. `environment` and `analysis` are nearly always
-passed by the CLI runners; `hyperparams` and `toys` default to `base`.
+---
 
-## Loading configuration
+## 2. Tier Details
 
-The public interface is `qpym2.cfg.get_config` (a thin wrapper around
-`HydraConfigManager.get_config`):
+### Tier 1: Environments (`config/environments/`)
+Contains machine-specific directory structures and path settings.
+- `base.yaml`: Abstract layout defining standard directory variables, file naming conventions, `qroot` ROOT tree definitions, and default output paths (e.g., `output_paths.artifact_store: "artifact_store"`).
+- `local.yaml`: Configures `infrastructure.data_root: "/data/cuore/Analysis/MC"` for local workstation development.
+- `nersc.yaml`: Configures `infrastructure.data_root: "/global/cfs/cdirs/cuore/..."` for NERSC Perlmutter execution.
+
+### Tier 2: Staging Contract (`config/staging/`)
+Specifies the transformation contract for producing staged `uvtree` ROOT files from raw data.
+- Staging default preselection:
+  ```yaml
+  cuts:
+    broad_preselection: "TotalEnergy >= 2390 && TotalEnergy <= 2570"
+    base: "Multiplicity == 2"
+    multiplicity: "TimeDiff >= 0 && TimeDiff <= 100e-3"
+    data_quality: "BaselineQuality == 1 && PulseQuality == 1"
+  ```
+- **Decoupling principle**: Staging preselection must be broad enough to encompass all downstream model ROIs, but never dependent on individual model thresholds, cutoffs, or energy shifts.
+
+### Tier 3: Analysis Conventions (`config/analysis/`)
+Defines shared component classifications and standard cuts dictionary:
+- `cuts.co_cuts`: Standard selection variants (`v150`, `gamma10`, `gamma10_v150`).
+- `cuts.ndbd_cutoff`: Standard $0\nu\beta\beta$ cutoff selections (`u1740`, `u1775`).
+- `components`: Standard background groupings (`co60`, `u238`, `th232`, `others`).
+
+### Tier 4: Models & ROI (`config/models/`)
+Defines concrete fit configurations keyed by name:
+- `tech_note_200`: `threshold: 200`, `bin_size: 2.5`, `esum_min: 2400`, `esum_max: 2570`.
+- `tech_note_250`: `threshold: 250`, `bin_size: 1.0`, `esum_min: 2400`, `esum_max: 2570`.
+- `tech_note_150`: `threshold: 150`, `bin_size: 1.0`, `esum_min: 2400`, `esum_max: 2570`.
+- `tech_note_3comp`: Component variation merging Uranium and Thorium.
+
+---
+
+## 3. Path Resolution Engine
+
+Paths are resolved using deterministic rules through `qpym2.cfg.hydra_adapter_new.resolve_data_path`:
+1. **Explicit absolute paths**: Any path starting with `/` is treated as an absolute path and returned as-is.
+2. **Relative paths**: Any relative path is resolved relative to `cfg.infrastructure.data_root`.
+3. **Environment variable override**: If `QPYM2_DATA_DIR` is set in the shell environment, it overrides `data_root` as the base directory for relative paths.
+
+---
+
+## 4. Programmatic Usage
+
+Loading configuration in Python:
 
 ```python
-from qpym2.cfg import get_config
+from qpym2.cfg.hydra_adapter_new import HydraConfigManager, get_config
 
+# Load default composition
+cfg = get_config()
+
+# Override environment or model parameters
 cfg = get_config(
-    environment="m2v5-1",
-    analysis="tech_note",
-    hyperparams=None,          # optional, default base
-    overrides=["hyperparams.co_shift=0.5"],
+    environment="nersc",
+    model="tech_note",
+    overrides=["models.tech_note_200.binning.bin_size=1.0"],
+)
+```
+
+Bridging to pipeline dictionaries:
+
+```python
+from qpym2.cfg.config_builders_new import (
+    build_staging_config,
+    build_input_config,
+    get_h2uv_model,
+    get_artifact_store_dir,
 )
 
-staging_dir = cfg.infrastructure.output_paths.staging_dir
-threshold   = cfg.models.tech_note.roi.threshold   # model key from analysis yaml
+staging_dict = build_staging_config(cfg)
+input_dict = build_input_config(cfg, model_key="tech_note_200")
+h2uv_model = get_h2uv_model(cfg, model_key="tech_note_200")
+store_path = get_artifact_store_dir(cfg)
 ```
-
-- `environment=`, `analysis=`, `hyperparams=` add Hydra overrides
-  `environments=<x>`, `analysis=<x>`, `hyperparams=<x>`.
-- `overrides=[...]` appends arbitrary Hydra-style overrides.
-- `plots_dir` is derived from `fit_dir/plots` when not explicitly set
-  (`_apply_output_paths_defaults`).
-- Toy configs are loaded separately:
-  `qpym2.cfg.load_toy_config("batch")` (simple YAML, see `toys/README.md`).
-
-Helpers in `HydraConfigManager`: `list_options()`, `get_default_selections()`,
-`get_config_dict()`, `print_config()`, `set_config_dir()`.
-
-### From the CLI
-
-Runners expose `-e/--environment` and `-a/--analysis` and forward them to
-`get_config`. They do **not** expose the rest of the config as flags; change
-those in the YAML.
-
-```bash
-python -m qpym2.run.run_create_input -e m2v5-1 -a tech_note
-```
-
-## Adapters for runners
-
-`qpym2/cfg/config_builders.py` converts the `DictConfig` into the plain dicts
-the pipeline code expects. Prefer these over reaching into `cfg` directly:
-
-| Function | Purpose |
-|---|---|
-| `build_staging_config` / `build_mc_config` / `build_ndbd_config` / `build_data_config` | Stage input dicts |
-| `build_input_config` / `build_write_config` | Input creation + output |
-| `get_h2uv_model` / `get_comp_cfg` | Model + component config |
-| `get_fit_dir` / `get_plots_dir` / `get_syst_dir` / `get_toy_results_dir` / `get_data_dir` | Output paths |
-| `get_jags_path` / `get_data_names` / `get_corrmat_path` | Input data paths/names |
-
-`qpym2/cfg/params_grid.py` is the single source of truth for grid axes
-(co_cuts, ndbd_cutoffs, co_shifts). `qpym2/cfg/model_utils.py` builds model
-directory names and parses them back.
-
-## Model definitions
-
-Models live under `models:` in the analysis tier, keyed by name. Example
-(abridged from `config/analysis/models_base.yaml` + a model variant):
-
-```yaml
-cuts:
-  co_cuts:
-    v150: "v>150"
-    gamma10: "abs(e1-1334)>10 && abs(e2-1173)>10"
-    gamma10_v150: "abs(e1-1334)>10 && abs(e2-1173)>10 && v>150"
-  ndbd_cutoff:
-    u1740: "u>1740"
-    u1775: "u>1775"
-
-models:
-  tech_note:
-    roi:
-      esum_min: 2400
-      esum_max: 2570
-      threshold: 200
-    binning:
-      bin_size: 1
-```
-
-- Rotated-axis (`u`/`v`) limits are **derived in code** from ROI
-  (`esum_min`, `esum_max`) and `threshold`; do not configure them directly.
-- Set only `models.*.binning.bin_size` (defined on the `e1`/`e2` axes).
-- `hyperparams.co_cuts` selects a key from `cuts.co_cuts`; `hyperparams.ndbd_cutoff`
-  selects a key from `cuts.ndbd_cutoff`.
-- Systematics are produced by varying these hyperparameters (`co_shift`,
-  `ndbd_shift`, cut selections) — see `qpym2/cfg/params_grid.py`.
-
-## Best practices
-
-- Keep **paths** in `environments/` and **physics** in `analysis/`.
-- Select config by name; avoid editing the master `config.yaml` for one-off runs.
-- Treat the YAML as the source of truth.

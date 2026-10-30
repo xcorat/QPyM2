@@ -1,0 +1,24 @@
+# QPyM2 Master Configuration
+# Hydra composition: loads defaults from each config tier
+
+# Hydra framework settings
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Composition order (Hydra defaults)
+# Each entry loads a config file from the corresponding directory
+# _self_ controls where this file's content is placed in merge order
+defaults:
+  - environments: base         # Tier 1: Infrastructure (paths, system)
+  - analysis: models_base      # Tier 2: Physics models (cuts, ROI, binning)
+  - hyperparams: base          # Tier 3: Systematic variations (co_shift, etc.)
+  - toys: base                 # Tier 4: Toy study parameters (optional)
+  - _self_
+
+# Pipeline metadata (for runner scripts)
+pipeline:
+  name: "qpym2"
+  version: "1.0"

@@ -1,0 +1,23 @@
+# @package _global_
+# Local workstation profile (example).
+# The data root is the common parent of the raw/JAGS (`BM_1ton`), staging
+# (`staging`) and results (`tech_note`) trees.
+
+defaults:
+  - base
+
+infrastructure:
+  data_root: "/data/cuore/Analysis/MC"
+  directories:
+    bm_dir: "BM_1ton"
+    ndbd_mc_dir: "tech_note/0vbb"
+    bkg_mc_dir: "tech_note/out_ares"
+  output_paths:
+    staging_dir: "staging"
+    fit_dir: "tech_note/fits"
+    plots_dir: "tech_note/plots"
+  data_files:
+    bkg_syst_corrmat: "BM_1ton/fit/Output/default/CorrelationMatrix.csv"
+
+system:
+  verbose_logging: false

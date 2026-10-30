@@ -78,21 +78,22 @@ argparse subparsers (`sscl` / `dq`).
 ## Configuration
 
 Hydra + OmegaConf loaded **programmatically**, not via `@hydra.main` and not
-exposed as CLI flags. `qpym2.cfg.get_config(environment=, analysis=, ...)` calls
-`compose()` over `config/config.yaml`.
+exposed as CLI flags. `qpym2.cfg.hydra_adapter_new.get_config(environment=, analysis=, model=, ...)`
+calls `compose()` over `config/config.yaml`.
 
-- Master defaults (`config/config.yaml`): `environments: base`,
-  `analysis: models_base`, `hyperparams: base`, `toys: base`.
-- Tiers: `config/environments/*.yaml` (paths/system, `@package _global_`),
-  `config/analysis/*.yaml` (models/ROI/cuts/binning), `config/hyperparams/*.yaml`
-  (systematic overrides), `config/toys/*.yaml` (toy params, loaded separately via
-  `qpym2.cfg.load_toy_config`).
+- Master defaults (`config/config.yaml`): `environments: local`,
+  `staging: default`, `analysis: base`, `models: tech_note`.
+- Tiers: `config/environments/*.yaml` (infrastructure, paths, data_root),
+  `config/staging/*.yaml` (raw-to-staged transform contract; default `broad_preselection: "TotalEnergy >= 2390 && TotalEnergy <= 2570"`),
+  `config/analysis/*.yaml` (baseline physics cuts dictionary & component groupings),
+  `config/models/*.yaml` (named statistical fit models, ROI & binning).
+- Legacy pre-v0.6 configs are backed up in `config_old/`.
 - Actual layout uses Hydra `defaults:` composition and `.yaml` extensions. See
-  `config/config_guide.md`; the live YAML is the source of truth.
-- `qpym2/cfg/config_builders.py` adapts `DictConfig` into the plain dicts the
+  `config/README.md` and `config/config_guide.md`; the live YAML is the source of truth.
+- `qpym2/cfg/config_builders_new.py` adapts `DictConfig` into the plain dicts the
   runners expect (`build_staging_config`, `build_input_config`, `get_h2uv_model`,
-  `get_fit_dir`, ...). `qpym2/cfg/params_grid.py` is the single source of truth
-  for grid axes.
+  `get_comp_cfg`, `get_artifact_store_dir`, ...). Path resolution is rooted at
+  `infrastructure.data_root` (or `QPYM2_DATA_DIR`).
 
 ## Testing
 

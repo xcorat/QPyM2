@@ -1,0 +1,61 @@
+# @package _global_
+# Tech Note 1-ton Model Configurations
+# Models can specify ROI boundaries, thresholds, binning, and custom MC component groupings
+
+models:
+  tech_note_200:
+    name: "hmu_tech_note"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+    binning:
+      bin_size: 2.5
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"
+    # Inherits default components from analysis/base.yaml
+
+  tech_note_250:
+    name: "hmu_tech_note_250"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 250
+      shift_padding: 10
+    binning:
+      bin_size: 1.0
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"
+
+  tech_note_150:
+    name: "hmu_tech_note_150"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 150
+      shift_padding: 10
+    binning:
+      bin_size: 1.0
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"
+
+  tech_note_3comp:
+    name: "hmu_tech_note_3comp"
+    roi:
+      esum_max: 2570
+      esum_min: 2400
+      threshold: 200
+      shift_padding: 10
+    binning:
+      bin_size: 2.5
+    cuts:
+      roi_cuts: "esum>=2515 && esum<=2535"
+    # Custom 3-component grouping variation: merges U and Th into one component
+    components:
+      - name: co60
+        filter_regex: "60Co"
+      - name: u_th
+        filter_regex: "238U|210Pb|232Th|208Pb"
+      - name: others
+        filter_regex_inverse: "60Co|238U|210Pb|232Th|208Pb"

@@ -1,27 +1,23 @@
 # @package _global_
-# M2 Environment Configuration
-# Use via: environment=nersc
+# NERSC Perlmutter profile (example).
+# Copy this tree into your data config dir and set `data_root` to an absolute
+# path for your allocation.
 
 defaults:
   - base
 
 infrastructure:
+  data_root: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
+  directories:
+    bm_dir: "BM_1ton"
+    ndbd_mc_dir: "MC/ares/0vbb"
+    bkg_mc_dir: "BM_1ton/out_ares"
   output_paths:
-    # Base results directory — plots_dir, systematic_dir, toy_results_dir are derived from this
-    data_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/"
-    fit_dir:  "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/fits"
-    plots_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/plots"
-    logs_dir: "/global/homes/x/xcorat/Analysis/M2/QPyM2x/data/logs"
-    
+    staging_dir: "MC/staging"
   data_files:
-    fit_input_pattern: "input.h5"
-    fit_result_pattern: "fit.h5"
-    fit_trace_pattern: "fit.nc"
+    jags_output: "BM_1ton/fit/Output/default/Out.h5"
+    bkg_syst_corrmat: "/global/homes/x/xcorat/Software/QPyM2/BM_corrmat_stef/CorrelationMatrix.csv"
     lss_data_path: "/global/homes/x/xcorat/Software/cuore-nersc-modern_v4.0.0/cuoremc/ares/data/Nature2021"
-
-  naming_conventions:
-    analysis_name: "m2uv"
-    # model_dir_pattern: "model_{co_cut}_{ndbd_cutoff}_{co_shift}" # TODO: remove?
 
 system:
   verbose_logging: false
