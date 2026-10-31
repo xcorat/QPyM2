@@ -24,6 +24,10 @@ dist/
 output/
 data/
 notebooks/*
+!notebooks/marimo/
+!notebooks/marimo/**
+notebooks/marimo/__marimo__/
+notebooks/marimo/__pycache__/
 tmp/
 
 # Keep agent guidance for the scratch notebooks area tracked
