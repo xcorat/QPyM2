@@ -266,3 +266,60 @@ def test_study_orchestrator(tmp_path, monkeypatch):
     m_file = study.save_manifest()
     assert m_file.is_file()
     assert m_file == study_dir / "test_orchestrator.manifest"
+
+
+def test_study_check_fits_and_collect_results(tmp_path, monkeypatch):
+    """Verify Study check_fits and collect_results aggregation into results.csv and SQLite."""
+    import pandas as pd
+    from qpym2.storage.backend import write_fit
+
+    study_dir = tmp_path / "fit_study"
+    study_dir.mkdir()
+
+    p0 = StudyPoint(point_id="p0", task_id=0, co_shift=0.0)
+    p1 = StudyPoint(point_id="p1", task_id=1, co_shift=0.8)
+
+    prefix_p0 = study_dir / "fit_out00000000"
+    prefix_p1 = study_dir / "fit_out11111111"
+
+    # Write mock fit for p0
+    comps = pd.DataFrame({"integral": [100.0, 5.0]}, index=["co60", "ndbd"])
+    write_fit(prefix_p0, table=comps, trace=None, data=None, metadata={"output_uuid": "out00000000"})
+
+    # Monkeypatch get_fit_hash on points
+    monkeypatch.setattr(
+        p0,
+        "get_fit_hash",
+        lambda *args, **kwargs: ({}, "out00000000", prefix_p0, study_dir),
+    )
+    monkeypatch.setattr(
+        p1,
+        "get_fit_hash",
+        lambda *args, **kwargs: ({}, "out11111111", prefix_p1, study_dir),
+    )
+
+    study = Study(
+        name="test_fits",
+        cfg=OmegaConf.create({}),
+        points=[p0, p1],
+        study_dir=study_dir,
+    )
+
+    # 1. Check fits status
+    status_df = study.check_fits()
+    assert bool(status_df.loc[0, "is_fitted"]) is True
+    assert status_df.loc[0, "status"] == "FITTED"
+    assert bool(status_df.loc[1, "is_fitted"]) is False
+    assert status_df.loc[1, "status"] == "PENDING_FIT"
+
+    # 2. Collect results for completed point
+    results_df = study.collect_results()
+    assert len(results_df) == 1
+    assert results_df.loc[0, "point_id"] == "p0"
+    assert results_df.loc[0, "output_uuid"] == "out00000000"
+    assert results_df.loc[0, "co60_integral"] == 100.0
+
+    # Verify results.csv and SQLite DB exist
+    assert (study_dir / "results.csv").is_file()
+    assert (study_dir / "test_fits.sqlite").is_file()
+

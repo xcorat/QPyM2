@@ -65,5 +65,6 @@ Some tests are currently known-broken; see the testing section of
 - [`AGENTS.md`](AGENTS.md) — architecture, commands, conventions, gotchas
   (also nested in `qpym2/`, `config/`, `scripts/`, `notebooks/`).
 - [`docs/setup.md`](docs/setup.md) — installation and environment validation.
+- [`docs/v0.6-storage-and-config-guide.md`](docs/v0.6-storage-and-config-guide.md) — v0.6 storage architecture, 4-tier config, and fit runners.
 - [`config/README.md`](config/README.md) — configuration layout.
 - [`scripts/README.md`](scripts/README.md) — parameter grids and job submission.

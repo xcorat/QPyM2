@@ -52,6 +52,12 @@ from qpym2.storage.study import (
     read_study_manifest,
     collect_study_results,
 )
+from qpym2.storage.fits import (
+    resolve_fit_template_uuids,
+    assemble_fit_components,
+    build_fit_hash,
+    setup_storage_fit,
+)
 
 __all__ = [
     # Schema
@@ -95,4 +101,9 @@ __all__ = [
     "write_study_manifest",
     "read_study_manifest",
     "collect_study_results",
+    # Fits
+    "resolve_fit_template_uuids",
+    "assemble_fit_components",
+    "build_fit_hash",
+    "setup_storage_fit",
 ]

@@ -6,68 +6,74 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import json
     import os
-    import shlex
-    import subprocess
     import sys
     from pathlib import Path
 
     import arviz as az
+    import matplotlib.pyplot as plt
     import marimo as mo
     import numpy as np
     import pandas as pd
 
-    from qpym2.cfg import get_config, get_comp_cfg, get_h2uv_model
-    from qpym2.cfg.config_builders import (
-        build_input_config,
-        get_artifact_store_dir,
-        get_data_names,
-        get_fit_dir,
+    from qpym2.cfg.config_builders_new import (
+        get_comp_cfg,
+        get_fit_data_dir,
+        get_h2uv_model,
         get_jags_path,
-        get_plots_dir,
+        get_model_storage_coords,
     )
-    from qpym2.cfg.hydra_adapter import HydraConfigManager, resolve_config_dir
-    from qpym2.fit.params import model_cfg as build_model_cfg
-    from qpym2.io.fit import read_fit as read_fit_artifact, read_input
-    from qpym2.plotting.projection_plots import plot_proj_h2
-    from qpym2.storage.hasher import derive_id
-    from qpym2.storage.schemas import FitParams, InputParams
-    from qpym2.storage.store import ArtifactStore
-    from qpym2.utils.hists import get_hist_settings, get_sum_hist
-    from qpym2.utils.mathy import find_mode, get_mode
+    from qpym2.cfg.hydra_adapter_new import (
+        HydraConfigManager,
+        get_config,
+        resolve_config_dir,
+    )
+    from qpym2.run.run_single_storage_fit import run_single_storage_fit
+    from qpym2.storage.backend import fit_exists, read_fit, read_observed_data
+    from qpym2.storage.fits import (
+        build_fit_hash,
+        resolve_fit_template_uuids,
+        setup_storage_fit,
+    )
+    from qpym2.storage.inputs import resolve_storage_coords
+    from qpym2.storage.paths import (
+        get_data_path,
+        get_fit_path,
+        get_input_dir,
+        get_output_dir,
+        get_parameter_dir,
+    )
+    from qpym2.studies import assemble_study
 
     return (
-        ArtifactStore,
-        FitParams,
         HydraConfigManager,
-        InputParams,
         Path,
+        assemble_study,
         az,
-        build_input_config,
-        build_model_cfg,
-        derive_id,
-        find_mode,
-        get_artifact_store_dir,
+        build_fit_hash,
+        fit_exists,
         get_comp_cfg,
         get_config,
-        get_data_names,
-        get_fit_dir,
+        get_fit_data_dir,
         get_h2uv_model,
-        get_hist_settings,
         get_jags_path,
-        get_mode,
-        get_plots_dir,
-        get_sum_hist,
+        get_model_storage_coords,
+        get_output_dir,
+        get_parameter_dir,
+        json,
         mo,
         np,
         os,
         pd,
-        plot_proj_h2,
-        read_fit_artifact,
-        read_input,
+        plt,
+        read_fit,
+        read_observed_data,
         resolve_config_dir,
-        shlex,
-        subprocess,
+        resolve_fit_template_uuids,
+        resolve_storage_coords,
+        run_single_storage_fit,
+        setup_storage_fit,
         sys,
     )
 
@@ -84,12 +90,11 @@ def _(mo, resolve_config_dir):
         [
             mo.md(
                 """
-                # Run one QPyM2 fit and inspect its results
+                # QPyM2 v0.6: Bayesian Fit Execution & Inspection Workbench
 
-                Prepare or reuse the fit-input artifact, run one configured fit,
-                then inspect posterior summaries, convergence, and data-versus-fit
-                projections. The fit is executed by `qpym2.run.run_single_fit` and
-                published to the configured artifact store.
+                Inspect and execute PyMC Bayesian fits within the modern QPyM2 storage architecture.
+                Features deterministic parameter-set UUID linking, `<output_UUID>` caching,
+                posterior convergence inspection, 2D/1D data vs fit comparisons, and study tracking.
                 """
             ),
             config_dir_input,
@@ -104,58 +109,60 @@ def _(HydraConfigManager, config_dir_input, mo):
     HydraConfigManager.set_config_dir(config_dir_input.value)
     config_options = HydraConfigManager.list_options()
 
-    environment_options = config_options.get("environments", ["local"])
+    env_options = config_options.get("environments", ["local"])
     environment = mo.ui.dropdown(
-        options=environment_options,
-        value="local" if "local" in environment_options else environment_options[0],
+        options=env_options,
+        value="local" if "local" in env_options else env_options[0],
         label="Environment",
     )
     analysis_options = config_options.get("analysis", ["base"])
     analysis = mo.ui.dropdown(
         options=analysis_options,
-        value="tech_note" if "tech_note" in analysis_options else analysis_options[0],
-        label="Analysis",
+        value="base" if "base" in analysis_options else analysis_options[0],
+        label="Analysis profile",
     )
-    model_config_options = config_options.get("models", ["tech_note"])
-    model_config = mo.ui.dropdown(
-        options=model_config_options,
-        value="tech_note" if "tech_note" in model_config_options else model_config_options[0],
+    model_sets = config_options.get("models", ["tech_note"])
+    model_set = mo.ui.dropdown(
+        options=model_sets,
+        value="tech_note" if "tech_note" in model_sets else model_sets[0],
         label="Model config set",
     )
-    mo.hstack([environment, analysis, model_config])
-    return analysis, environment, model_config
+
+    mo.hstack([environment, analysis, model_set])
+    return analysis, environment, model_set
 
 
 @app.cell
-def _(analysis, config_dir_input, environment, get_config, mo, model_config):
+def _(analysis, config_dir_input, environment, get_config, mo, model_set):
     cfg = get_config(
         environment=environment.value,
         analysis=analysis.value,
-        models=model_config.value,
+        models=model_set.value,
         config_dir=config_dir_input.value,
     )
-    model_key_options = list(cfg.models.keys())
+    model_keys = list(cfg.models.keys())
     model_key = mo.ui.dropdown(
-        options=model_key_options,
-        value="tech_note_200" if "tech_note_200" in model_key_options else model_key_options[0],
+        options=model_keys,
+        value="tech_note_200" if "tech_note_200" in model_keys else model_keys[0],
         label="Model entry",
     )
-    mo.hstack([mo.md("Model entries in this config:"), model_key])
+    mo.hstack([mo.md("**Model Entry:**"), model_key])
     return cfg, model_key
 
 
 @app.cell
 def _(cfg, mo):
-    co_cut_options = ["None", *list(cfg.cuts.co_cuts.keys())]
-    ndbd_cutoff_options = ["None", *list(cfg.cuts.ndbd_cutoff.keys())]
+    co_cuts = ["None", *list(getattr(cfg.cuts, "co_cuts", {}).keys())]
+    ndbd_cuts = ["None", *list(getattr(cfg.cuts, "ndbd_cutoff", {}).keys())]
+
     co_cut = mo.ui.dropdown(
-        options=co_cut_options,
-        value="gamma10_v150" if "gamma10_v150" in co_cut_options else co_cut_options[0],
+        options=co_cuts,
+        value="gamma10_v150" if "gamma10_v150" in co_cuts else co_cuts[0],
         label="Co-60 cut",
     )
     ndbd_cutoff = mo.ui.dropdown(
-        options=ndbd_cutoff_options,
-        value="u1740" if "u1740" in ndbd_cutoff_options else ndbd_cutoff_options[0],
+        options=ndbd_cuts,
+        value="u1740" if "u1740" in ndbd_cuts else ndbd_cuts[0],
         label="0νββ cutoff",
     )
     co_shift = mo.ui.dropdown(
@@ -168,29 +175,24 @@ def _(cfg, mo):
         value=0.0,
         label="0νββ shift [keV]",
     )
-    blinded = mo.ui.checkbox(value=False, label="Use blinded data")
-    skip_roi = mo.ui.checkbox(value=False, label="Exclude an ROI interval")
-    roi_min = mo.ui.number(value=2515.0, label="Excluded ROI min [keV]")
-    roi_max = mo.ui.number(value=2540.0, label="Excluded ROI max [keV]")
+    blinded = mo.ui.checkbox(value=False, label="Blinded data")
     prior_width = mo.ui.dropdown(
         options=["5sig", "10sig", "syst", "2syst"],
         value="5sig",
         label="Prior width",
     )
-    chains = mo.ui.number(value=8, start=1, step=1, label="Chains")
-    draws = mo.ui.number(value=20000, start=1, step=1000, label="Draws per chain")
-    single_core = mo.ui.checkbox(value=False, label="Run sampler single-core")
-    force = mo.ui.checkbox(value=False, label="Force a new fit (ignore cached fit)")
-    save_plots = mo.ui.checkbox(value=False, label="Save displayed figures")
+    chains = mo.ui.number(value=4, start=1, step=1, label="Chains")
+    draws = mo.ui.number(value=2000, start=100, step=500, label="Draws per chain")
+    single_core = mo.ui.checkbox(value=False, label="Single core")
+    save_trace = mo.ui.checkbox(value=True, label="Save .nc trace")
+    force = mo.ui.checkbox(value=False, label="Force re-run (ignore cache)")
+
     mo.vstack(
         [
-            mo.md("## Fit point and sampler settings"),
-            mo.hstack([co_cut, ndbd_cutoff]),
-            mo.hstack([co_shift, ndbd_shift]),
-            mo.hstack([blinded, skip_roi]),
-            mo.hstack([roi_min, roi_max]),
-            mo.hstack([prior_width, chains, draws]),
-            mo.hstack([single_core, force, save_plots]),
+            mo.md("### Parameter Point & MCMC Options"),
+            mo.hstack([co_cut, ndbd_cutoff, co_shift, ndbd_shift]),
+            mo.hstack([blinded, prior_width, chains, draws]),
+            mo.hstack([single_core, save_trace, force]),
         ]
     )
     return (
@@ -203,628 +205,284 @@ def _(cfg, mo):
         ndbd_cutoff,
         ndbd_shift,
         prior_width,
-        roi_max,
-        roi_min,
-        save_plots,
+        save_trace,
         single_core,
-        skip_roi,
     )
 
 
 @app.cell
 def _(
-    ArtifactStore,
-    FitParams,
-    InputParams,
-    Path,
-    analysis,
     blinded,
-    build_input_config,
-    build_model_cfg,
+    build_fit_hash,
     cfg,
     chains,
     co_cut,
     co_shift,
-    derive_id,
     draws,
-    environment,
-    force,
-    get_artifact_store_dir,
-    get_comp_cfg,
-    get_data_names,
-    get_fit_dir,
-    get_h2uv_model,
-    get_jags_path,
-    get_plots_dir,
+    get_output_dir,
     mo,
-    model_config,
     model_key,
     ndbd_cutoff,
     ndbd_shift,
     pd,
     prior_width,
-    roi_max,
-    roi_min,
-    shlex,
-    single_core,
-    skip_roi,
-    sys,
+    resolve_fit_template_uuids,
+    resolve_storage_coords,
 ):
-    selected_co_cut = None if co_cut.value == "None" else co_cut.value
-    selected_ndbd_cutoff = None if ndbd_cutoff.value == "None" else ndbd_cutoff.value
-    selected_skip_roi = (float(roi_min.value), float(roi_max.value)) if skip_roi.value else None
-    if selected_skip_roi is not None and selected_skip_roi[0] >= selected_skip_roi[1]:
-        raise ValueError("Excluded ROI minimum must be less than its maximum")
+    # Preview parameter hashes and target paths without running sampler
+    sel_co_cut = None if co_cut.value == "None" else co_cut.value
+    sel_ndbd_cut = None if ndbd_cutoff.value == "None" else ndbd_cutoff.value
 
-    h2uv_model = get_h2uv_model(cfg, model_key=model_key.value)
-    component_cfg = get_comp_cfg(cfg, model_key=model_key.value)
-    input_config = build_input_config(cfg, model_key=model_key.value)
-    jags_path_value = get_jags_path(cfg)
-    jags_path = Path(jags_path_value) if jags_path_value else None
-    fit_root = Path(get_fit_dir(cfg))
-    store_root = Path(get_artifact_store_dir(cfg))
-    plots_dir = Path(get_plots_dir(cfg))
-    data_name, data_blinded_name = get_data_names(cfg)
-    mcfg = build_model_cfg(
-        h2uv_model,
-        co_cut=selected_co_cut,
-        ndbd_cutoff=selected_ndbd_cutoff,
+    coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key.value)
+    out_dir = get_output_dir(param_dir)
+
+    tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
+        cfg=cfg,
+        model_key=model_key.value,
+        co_cut=sel_co_cut,
+        ndbd_cutoff=sel_ndbd_cut,
         co_shift=float(co_shift.value),
         ndbd_shift=float(ndbd_shift.value),
-        skip_roi=selected_skip_roi or False,
-        blinded=bool(blinded.value),
-        smooth=getattr(h2uv_model, "smooth", True),
-        co_cuts_dict=dict(cfg.cuts.co_cuts),
-        ndbd_cuts_dict=dict(cfg.cuts.ndbd_cutoff),
     )
 
-    input_params = InputParams(
-        bin_size=float(h2uv_model.bin_size),
-        esum_min=float(h2uv_model.esum_min),
-        esum_max=float(h2uv_model.esum_max),
-        threshold=float(h2uv_model.threshold),
-        histogram_type="h2uv",
-        co_cut=selected_co_cut,
-        ndbd_cutoff=selected_ndbd_cutoff,
-        skip_roi=selected_skip_roi,
-        co_shift=float(co_shift.value),
-        ndbd_shift=float(ndbd_shift.value),
-        version=1,
-    )
-    input_id = derive_id("fit-input", input_params)
-    fit_params = FitParams(
-        components=tuple(c.get("name") for c in component_cfg if "name" in c),
-        smooth=bool(h2uv_model.smooth),
-        likelihood="poisson",
-        priors={"mode": prior_width.value, "mkchain_samples": 100},
-        co_cut=selected_co_cut,
-        ndbd_cutoff=selected_ndbd_cutoff,
-        co_shift=float(co_shift.value),
-        ndbd_shift=float(ndbd_shift.value),
-        skip_roi=selected_skip_roi,
-        blinded=bool(blinded.value),
-        version=1,
-    )
-    fit_id = derive_id("fit", fit_params, upstream={"input": input_id})
-    store = ArtifactStore(store_root)
-    input_artifact_path = store.get_path(input_id, "input.h5", artifact_type="fit-input")
-    fit_artifact_dir = store.object_dir(fit_id, artifact_type="fit")
+    smoothing_cfg = {
+        "enabled": bool(getattr(hm, "smooth", None)),
+        "method": "smooth_nph2",
+        "smooth": list(hm.smooth) if getattr(hm, "smooth", None) else None,
+    }
+    prior_cfg = {"prior_width": prior_width.value}
+    mcmc_cfg = {"chains": int(chains.value), "draws": int(draws.value)}
+    data_source_name = "data_blinded" if blinded.value else "data"
 
-    input_command = [
-        sys.executable,
-        "-m",
-        "qpym2.run.run_create_input",
-        "--environment",
-        environment.value,
-        "--analysis",
-        analysis.value,
-        "--models",
-        model_config.value,
-        "--model-key",
-        model_key.value,
-        "--co-shifts",
-        str(co_shift.value),
-        "--ndbd-shift",
-        str(ndbd_shift.value),
-        "--legacy-path",
-    ]
-    if selected_co_cut is not None:
-        input_command.extend(["--co-cut", selected_co_cut])
-    if selected_ndbd_cutoff is not None:
-        input_command.extend(["--ndbd-cutoff", selected_ndbd_cutoff])
-    if selected_skip_roi is not None:
-        input_command.extend(["--skip-roi", str(selected_skip_roi[0]), str(selected_skip_roi[1])])
-    if blinded.value:
-        input_command.append("--blinded")
-
-    fit_command = [
-        sys.executable,
-        "-m",
-        "qpym2.run.run_single_fit",
-        "--environment",
-        environment.value,
-        "--analysis",
-        analysis.value,
-        "--models",
-        model_config.value,
-        "--model-key",
-        model_key.value,
-        "--co-shift",
-        str(co_shift.value),
-        "--ndbd-shift",
-        str(ndbd_shift.value),
-        "--prior-width",
-        prior_width.value,
-        "--chains",
-        str(int(chains.value)),
-        "--draws",
-        str(int(draws.value)),
-    ]
-    if selected_co_cut is not None:
-        fit_command.extend(["--co-cut", selected_co_cut])
-    if selected_ndbd_cutoff is not None:
-        fit_command.extend(["--ndbd-cutoff", selected_ndbd_cutoff])
-    if selected_skip_roi is not None:
-        fit_command.extend(["--skip-roi", str(selected_skip_roi[0]), str(selected_skip_roi[1])])
-    if blinded.value:
-        fit_command.extend(["--blinded", "true"])
-    if single_core.value:
-        fit_command.append("--single-core")
-    if force.value:
-        fit_command.append("--force")
-
-    staged_data_name = (
-        input_config.get("data_blinded_name", input_config["data_fname"])
-        if blinded.value
-        else input_config["data_fname"]
+    fit_params, output_uuid = build_fit_hash(
+        model_name="m2",
+        data_source=data_source_name,
+        template_uuids=tpl_uuids,
+        smoothing=smoothing_cfg,
+        priors=prior_cfg,
+        roi_settings=None,
+        mcmc=mcmc_cfg,
     )
-    data_path = Path(input_config["outpath"]) / staged_data_name
-    resolved_inputs = pd.DataFrame(
+
+    fit_prefix = out_dir / f"fit_{output_uuid}"
+    h5_exists = fit_prefix.with_suffix(".h5").exists()
+    nc_exists = fit_prefix.with_suffix(".nc").exists()
+
+    run_btn = mo.ui.run_button(label="Execute / Load Fit")
+
+    info_df = pd.DataFrame(
         [
-            {"input": "staged data ROOT", "path": str(data_path), "reachable": data_path.is_file()},
-            {
-                "input": "JAGS background table",
-                "path": str(jags_path) if jags_path else "Not configured",
-                "reachable": bool(jags_path and jags_path.is_file()),
-            },
-            {
-                "input": "fit-input artifact",
-                "path": str(input_artifact_path),
-                "reachable": input_artifact_path.is_file(),
-            },
-            {"input": "artifact store", "path": str(store_root), "reachable": store_root.is_dir()},
+            {"Property": "Parameter Directory", "Value": str(param_dir)},
+            {"Property": "Base UUID (invariants)", "Value": uuid_base},
+            {"Property": "Co-60 UUID", "Value": uuid_co},
+            {"Property": "0νββ UUID", "Value": uuid_ndbd},
+            {"Property": "Output UUID", "Value": output_uuid},
+            {"Property": "Fit HDF5 Target", "Value": f"{fit_prefix.name}.h5 ({'EXISTS' if h5_exists else 'MISSING'})"},
+            {"Property": "Trace NetCDF Target", "Value": f"{fit_prefix.name}.nc ({'EXISTS' if nc_exists else 'MISSING'})"},
         ]
     )
-    legacy_input_name = "input_noroi" if selected_skip_roi else "input"
-    legacy_input_path = (
-        fit_root / mcfg["dir_name"] / f"{legacy_input_name}{mcfg['shift_suffix']}.h5"
-    )
+
     mo.vstack(
         [
-            mo.md("## Resolved fit point and prerequisites"),
-            mo.ui.table(resolved_inputs, selection=None),
-            mo.md(
-                f"Model bin size: **{h2uv_model.bin_size:g} keV**; ROI: "
-                f"**{h2uv_model.esum_min:g}–{h2uv_model.esum_max:g} keV**.  \n"
-                f"Fit input artifact: `{input_id}`  \n"
-                f"Fit artifact: `{fit_id}`  \n"
-                f"Legacy input path used by the fit runner: `{legacy_input_path}`  \n"
-                f"Expected fit output: `{fit_artifact_dir}`"
-            ),
-            mo.md("Input preparation command:"),
-            mo.md(f"```bash\n{shlex.join(input_command)}\n```"),
-            mo.md("Fit command:"),
-            mo.md(f"```bash\n{shlex.join(fit_command)}\n```"),
-            mo.callout(
-                mo.md(
-                    "The run button first prepares or reuses this input and materializes "
-                    "the legacy input file required by the single-fit runner."
-                ),
-                kind="info",
-            ),
+            mo.md("### Output Hash Preview & Cache Status"),
+            mo.ui.table(info_df),
+            run_btn,
         ]
     )
     return (
-        data_blinded_name,
-        data_name,
-        fit_artifact_dir,
-        fit_command,
-        fit_id,
-        h2uv_model,
-        input_artifact_path,
-        input_command,
-        plots_dir,
-        store,
+        fit_params,
+        fit_prefix,
+        h5_exists,
+        nc_exists,
+        output_uuid,
+        param_dir,
+        run_btn,
+        sel_co_cut,
+        sel_ndbd_cut,
+        uuid_base,
+        uuid_co,
+        uuid_ndbd,
     )
-
-
-app._unparsable_cell(
-    r"""
-    run_button = mo.ui.run_button(label="Prepare input and run this fit")
-    last_run_click, set_last_run_click = mo.state(0)10.84.174.781010.84.174.78.84.174.78
-    mo.vstack(
-        [
-            mo.md("## Run"),
-            run_button,
-            mo.md(
-                "Fit inputs may require ROOT files and a JAGS table on the configured data paths."
-            ),
-        ]
-    )
-    """,
-    name="_"
-)
 
 
 @app.cell
 def _(
-    config_dir_input,
-    fit_command,
-    input_command,
-    last_run_click,
-    mo,
-    os,
-    run_button,
-    set_last_run_click,
-    subprocess,
-):
-    if run_button.value and run_button.value > last_run_click():
-        set_last_run_click(run_button.value)
-        run_environment = os.environ.copy()
-        run_environment["QPYM2_CONFIG_DIR"] = config_dir_input.value
-        command_results = []
-        for label, command in [
-            ("Prepare fit input", input_command),
-            ("Run fit", fit_command),
-        ]:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                env=run_environment,
-                check=False,
-            )
-            command_output = "\n".join(
-                part for part in [result.stdout, result.stderr] if part
-            ).strip()
-            command_results.append((label, result.returncode, command_output))
-            if result.returncode != 0:
-                break
-
-        failed = next((item for item in command_results if item[1] != 0), None)
-        if failed is None:
-            run_status = mo.callout(
-                mo.md("Input preparation and fit runner completed successfully."),
-                kind="success",
-            )
-        else:
-            run_status = mo.callout(
-                mo.md(f"{failed[0]} exited with status **{failed[1]}**."),
-                kind="danger",
-            )
-        run_output = mo.vstack(
-            [
-                mo.md(f"### {label} — exit status {code}\n```text\n{output or '(no output)'}\n```")
-                for label, code, output in command_results
-            ]
-        )
-    else:
-        run_status = mo.md("_No fit run requested in this session._")
-        run_output = mo.md("")
-    mo.vstack([run_status, run_output])
-    return
-
-
-@app.cell
-def _(
-    az,
     blinded,
-    data_blinded_name,
-    data_name,
-    find_mode,
-    fit_artifact_dir,
-    fit_id,
-    get_mode,
-    input_artifact_path,
+    cfg,
+    chains,
+    co_shift,
+    draws,
+    fit_prefix,
+    force,
+    h5_exists,
     mo,
-    np,
-    pd,
-    read_fit_artifact,
-    read_input,
-    store,
+    model_key,
+    ndbd_shift,
+    prior_width,
+    read_fit,
+    run_btn,
+    run_single_storage_fit,
+    save_trace,
+    sel_co_cut,
+    sel_ndbd_cut,
+    single_core,
 ):
-    fit_trace_path = store.get_path(fit_id, "fit.nc", artifact_type="fit")
-    fit_components_path = store.get_path(fit_id, "fit.h5", artifact_type="fit")
-    if (
-        store.exists(fit_id, artifact_type="fit")
-        and fit_trace_path.is_file()
-        and fit_components_path.is_file()
-        and input_artifact_path.is_file()
-    ):
-        fit_components, trace, _ = read_fit_artifact(fullname=str(fit_artifact_dir / "fit"))
-        _, signal_df, fit_data, edges = read_input(
-            str(input_artifact_path),
-            dataname=data_blinded_name if blinded.value else data_name,
-        )
-        fit_data = np.asarray(fit_data)
-        variable_names = list(fit_components.index)
-        posterior_modes = find_mode(trace, varnames=variable_names)
-        posterior_summary = az.summary(trace, var_names=variable_names, round_to=3)
-        result_table = pd.DataFrame(
-            {
-                "mode": posterior_modes,
-                "integral": [
-                    fit_components.loc[name, "integral"]
-                    if "integral" in fit_components.columns
-                    else None
-                    for name in variable_names
-                ],
-                "mean": posterior_summary["mean"],
-                "sd": posterior_summary["sd"],
-                "r_hat": posterior_summary["r_hat"],
-                "ess_bulk": posterior_summary["ess_bulk"],
-            },
-            index=variable_names,
-        )
-        divergence_count = (
-            int(trace.sample_stats["diverging"].sum().values)
-            if "diverging" in trace.sample_stats
-            else 0
-        )
-        max_rhat = float(posterior_summary["r_hat"].max())
-        min_ess = float(posterior_summary["ess_bulk"].min())
-        if "ndbd" in trace.posterior:
-            ndbd_samples = trace.posterior["ndbd"].values.flatten()
-            ndbd_mode = float(get_mode(ndbd_samples))
-            ndbd_p16, ndbd_p84, ndbd_p90 = np.percentile(ndbd_samples, [16, 84, 90])
-            ndbd_summary = mo.md(
-                f"**0νββ posterior:** mode `{ndbd_mode:.3f}` events; "
-                f"central 68% interval `[{ndbd_p16:.3f}, {ndbd_p84:.3f}]`; "
-                f"90th percentile `{ndbd_p90:.3f}` events."
-            )
+    if not run_btn.value and not h5_exists:
+        mo.output.replace(mo.md("*Click 'Execute / Load Fit' to run or inspect fit results.*"))
+        table, trace, data, metadata = None, None, None, None
+    else:
+        if h5_exists and not force.value:
+            mo.output.replace(mo.md(f"**Loaded cached fit from:** `{fit_prefix}.h5`"))
+            table, trace, data, metadata = read_fit(fit_prefix)
         else:
-            ndbd_samples = None
-            ndbd_summary = mo.md("No `ndbd` posterior variable is present in this fit.")
+            mo.output.replace(mo.md(f"**Running Bayesian fit for {fit_prefix.name}...**"))
+            res = run_single_storage_fit(
+                cfg=cfg,
+                model_key=model_key.value,
+                co_cut=sel_co_cut,
+                ndbd_cutoff=sel_ndbd_cut,
+                co_shift=float(co_shift.value),
+                ndbd_shift=float(ndbd_shift.value),
+                blinded=blinded.value,
+                prior_width=prior_width.value,
+                chains=int(chains.value),
+                draws=int(draws.value),
+                single_core=single_core.value,
+                save_trace=save_trace.value,
+                force=force.value,
+                verbose=False,
+            )
+            table, trace, data, metadata = res.get("table"), res.get("trace"), res.get("data"), res.get("metadata")
 
-        convergence_kind = "success" if divergence_count == 0 and max_rhat < 1.01 else "warn"
-        convergence_view = mo.callout(
-            mo.md(
-                f"Divergences: **{divergence_count}** · maximum r_hat: **{max_rhat:.4f}** · "
-                f"minimum bulk ESS: **{min_ess:.0f}**"
-            ),
-            kind=convergence_kind,
-        )
-        results_view = mo.vstack(
+    return data, metadata, table, trace
+
+
+@app.cell
+def _(mo, np, pd, table, trace):
+    if table is None:
+        mo.output.replace(mo.md(""))
+    else:
+        records = []
+        for var in table.index:
+            rec = {"Component": var}
+            if "integral" in table.columns:
+                rec["Prior Integral"] = f"{float(table.loc[var, 'integral']):.1f}"
+            if trace is not None and hasattr(trace, "posterior") and var in trace.posterior:
+                vals = trace.posterior[var].values
+                rec["Posterior Mean"] = f"{float(vals.mean()):.2f}"
+                rec["Posterior Std"] = f"{float(vals.std()):.2f}"
+                rec["90% Interval"] = f"[{float(np.percentile(vals, 5)):.1f}, {float(np.percentile(vals, 95)):.1f}]"
+            records.append(rec)
+
+        res_df = pd.DataFrame(records)
+        mo.vstack(
             [
-                mo.md(f"## Results for `{fit_id}`"),
-                mo.md(f"Loaded fit files from `{fit_artifact_dir}`."),
-                ndbd_summary,
-                convergence_view,
-                mo.ui.table(result_table, selection=None),
-                mo.md(
-                    f"Loaded **{len(fit_data):,} data events**, **{len(fit_components)} fitted components**, "
-                    f"and **{len(edges[0]) - 1} × {len(edges[1]) - 1} histogram bins**."
-                ),
+                mo.md("### Fitted Component Summary"),
+                mo.ui.table(res_df),
             ]
         )
-        posterior_norms = np.asarray(posterior_modes, dtype=float)
-        results_available = True
+    return (records, res_df)
+
+
+@app.cell
+def _(mo, plt, table, trace):
+    if trace is None or not hasattr(trace, "posterior"):
+        mo.output.replace(mo.md("*Trace (.nc) not available for detailed posterior plots.*"))
+        plot_var = None
     else:
-        fit_components = None
-        trace = None
-        fit_data = None
-        edges = None
-        variable_names = []
-        posterior_modes = None
-        posterior_summary = None
-        result_table = None
-        divergence_count = None
-        max_rhat = None
-        min_ess = None
-        ndbd_samples = None
-        posterior_norms = None
-        results_available = False
-        results_view = mo.callout(
-            mo.md(
-                "The fit artifact is not available yet. Run the fit above, or check that "
-                "the selected input and output paths are reachable."
-            ),
-            kind="info",
-        )
-    results_view
-    return (
-        fit_components,
-        fit_data,
-        posterior_norms,
-        results_available,
-        trace,
-        variable_names,
+        var_options = [v for v in table.index if v in trace.posterior]
+        plot_var = mo.ui.dropdown(options=var_options, value=var_options[0] if var_options else None, label="Plot variable")
+        mo.hstack([mo.md("**Posterior Diagnostics:**"), plot_var])
+    return (plot_var,)
+
+
+@app.cell
+def _(np, plot_var, plt, trace):
+    if plot_var is None or plot_var.value is None or trace is None:
+        fig = None
+    else:
+        vname = plot_var.value
+        vals = trace.posterior[vname].values.flatten()
+        fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+        # Posterior distribution
+        axes[0].hist(vals, bins=40, color="steelblue", edgecolor="black", alpha=0.7, density=True)
+        q05, q50, q95 = np.percentile(vals, [5, 50, 95])
+        axes[0].axvline(q50, color="darkred", linestyle="--", label=f"Median: {q50:.1f}")
+        axes[0].axvline(q05, color="gray", linestyle=":", label=f"90% CI: [{q05:.1f}, {q95:.1f}]")
+        axes[0].axvline(q95, color="gray", linestyle=":")
+        axes[0].set_xlabel(f"{vname} events")
+        axes[0].set_ylabel("Posterior Density")
+        axes[0].set_title(f"Posterior Distribution: {vname}")
+        axes[0].legend(frameon=True)
+
+        # MCMC chain trace
+        for c in range(trace.posterior.sizes.get("chain", 1)):
+            chain_vals = trace.posterior[vname].sel(chain=c).values
+            axes[1].plot(chain_vals, alpha=0.6, label=f"Chain {c}")
+        axes[1].set_xlabel("Draw")
+        axes[1].set_ylabel("Sample Value")
+        axes[1].set_title(f"Trace Plot: {vname}")
+
+        plt.tight_layout()
+    fig
+    return (fig,)
+
+
+@app.cell
+def _(assemble_study, mo, pd, plt):
+    study_input = mo.ui.text(value="studies/example_co_shift", label="Study directory", full_width=True)
+    check_study_btn = mo.ui.run_button(label="Inspect Study")
+
+    mo.vstack(
+        [
+            mo.md("### Study Inspection & Result Aggregation"),
+            study_input,
+            check_study_btn,
+        ]
     )
+    return (check_study_btn, study_input)
 
 
 @app.cell
-def _(
-    az,
-    fit_id,
-    mo,
-    np,
-    plots_dir,
-    results_available,
-    save_plots,
-    trace,
-    variable_names,
-):
-    if results_available:
-        trace_axes = az.plot_trace(
-            trace,
-            var_names=variable_names,
-            compact=True,
-            figsize=(14, max(3, 2.2 * len(variable_names))),
-        )
-        trace_fig = np.asarray(trace_axes, dtype=object).flat[0].figure
-        trace_fig.suptitle("Posterior traces by component", y=1.01)
-        trace_fig.tight_layout()
-        if save_plots.value:
-            plots_dir.mkdir(parents=True, exist_ok=True)
-            trace_fig.savefig(plots_dir / f"{fit_id}_trace.png", dpi=160, bbox_inches="tight")
-        trace_plot_view = trace_fig
+def _(Path, assemble_study, check_study_btn, mo, pd, plt, study_input):
+    if not check_study_btn.value:
+        mo.output.replace(mo.md("*Click 'Inspect Study' to assemble and view study points.*"))
     else:
-        trace_plot_view = mo.md("_")
-    trace_plot_view
-    return
+        sdir = Path(study_input.value)
+        if not sdir.exists():
+            mo.output.replace(mo.md(f"⚠️ Study directory `{sdir}` does not exist."))
+        else:
+            study = assemble_study(sdir)
+            fits_df = study.check_fits()
 
+            res_csv = sdir / "results.csv"
+            res_plot = None
+            if res_csv.exists():
+                rdf = pd.read_csv(res_csv)
+                if "co_shift" in rdf.columns and "ndbd_mean" in rdf.columns:
+                    fig, ax = plt.subplots(figsize=(6, 3.5))
+                    ax.errorbar(
+                        rdf["co_shift"],
+                        rdf["ndbd_mean"],
+                        yerr=rdf["ndbd_std"] if "ndbd_std" in rdf.columns else None,
+                        fmt="o-",
+                        capsize=3,
+                        color="navy",
+                    )
+                    ax.set_xlabel("Co-60 Shift [keV]")
+                    ax.set_ylabel("Fitted 0νββ Events")
+                    ax.set_title(f"{study.name}: 0νββ Yield vs Co-60 Shift")
+                    plt.tight_layout()
+                    res_plot = fig
 
-@app.cell
-def _(
-    az,
-    fit_id,
-    mo,
-    np,
-    plots_dir,
-    results_available,
-    save_plots,
-    trace,
-    variable_names,
-):
-    if results_available:
-        pair_size = max(8, 2.2 * len(variable_names))
-        pair_axes = az.plot_pair(
-            trace,
-            var_names=variable_names,
-            kind="kde",
-            marginals=True,
-            figsize=(pair_size, pair_size),
-        )
-        pair_fig = np.asarray(pair_axes, dtype=object).flat[0].figure
-        pair_fig.suptitle("Joint posterior distributions", y=1.01)
-        pair_fig.tight_layout()
-        if save_plots.value:
-            plots_dir.mkdir(parents=True, exist_ok=True)
-            pair_fig.savefig(
-                plots_dir / f"{fit_id}_posterior_pair.png", dpi=160, bbox_inches="tight"
+            mo.vstack(
+                [
+                    mo.md(f"**Assembled Study:** `{study.name}` ({len(study)} evaluation points)"),
+                    mo.ui.table(fits_df[["task_id", "point_id", "co_shift", "output_uuid", "is_fitted", "status"]]),
+                    res_plot if res_plot is not None else mo.md("*No results.csv found. Run study to generate aggregated plot.*"),
+                ]
             )
-        pair_plot_view = pair_fig
-    else:
-        pair_plot_view = mo.md("_")
-    pair_plot_view
-    return
-
-
-@app.cell
-def _(
-    fit_components,
-    fit_data,
-    get_hist_settings,
-    get_sum_hist,
-    h2uv_model,
-    mo,
-    np,
-    posterior_norms,
-    results_available,
-):
-    if results_available:
-        nbins, hist_range = get_hist_settings(h2uv_model)
-        _data_hist, _x_edges, _y_edges = np.histogram2d(
-            fit_data[:, 0],
-            fit_data[:, 1],
-            bins=nbins,
-            range=hist_range,
-        )
-        _fit_hist = get_sum_hist(fit_components, posterior_norms)
-        projection_data = (_data_hist, _fit_hist, _x_edges, _y_edges)
-    else:
-        projection_data = None
-    projection_status = mo.md("_") if projection_data is None else mo.md("")
-    projection_status
-    return (projection_data,)
-
-
-@app.cell
-def _(
-    fit_id,
-    h2uv_model,
-    mo,
-    plot_proj_h2,
-    plots_dir,
-    projection_data,
-    results_available,
-    save_plots,
-):
-    if results_available:
-        _data_hist, _fit_hist, _x_edges, _y_edges = projection_data
-        fig_esum, _, _ = plot_proj_h2(
-            _data_hist,
-            _fit_hist,
-            _x_edges,
-            _y_edges,
-            h2uv_model,
-            axis="esum",
-            title="E-sum projection with pulls",
-            log_scale=True,
-        )
-        if save_plots.value:
-            plots_dir.mkdir(parents=True, exist_ok=True)
-            fig_esum.savefig(
-                plots_dir / f"{fit_id}_esum_projection.png", dpi=160, bbox_inches="tight"
-            )
-        esum_plot_view = fig_esum
-    else:
-        esum_plot_view = mo.md("_")
-    esum_plot_view
-    return
-
-
-@app.cell
-def _(
-    fit_id,
-    h2uv_model,
-    mo,
-    plot_proj_h2,
-    plots_dir,
-    projection_data,
-    results_available,
-    save_plots,
-):
-    if results_available:
-        _data_hist, _fit_hist, _x_edges, _y_edges = projection_data
-        bin_size = float(getattr(h2uv_model, "bin_size", getattr(h2uv_model, "binsize", 1.0)))
-        fig_ediff, _, _ = plot_proj_h2(
-            _data_hist,
-            _fit_hist,
-            _x_edges,
-            _y_edges,
-            h2uv_model,
-            axis="ediff",
-            rebin=max(1, int(round(10.0 / bin_size))),
-            title="E-difference projection with pulls",
-            log_scale=False,
-        )
-        if save_plots.value:
-            plots_dir.mkdir(parents=True, exist_ok=True)
-            fig_ediff.savefig(
-                plots_dir / f"{fit_id}_ediff_projection.png",
-                dpi=160,
-                bbox_inches="tight",
-            )
-        ediff_plot_view = fig_ediff
-    else:
-        ediff_plot_view = mo.md("_")
-    ediff_plot_view
-    return
-
-
-@app.cell
-def _():
-    from pydantic_ai import Agent
-
-    # Try switching from 'openai:gpt-6-luna' to 'openai-chat:gpt-6-luna'
-    agent = Agent("openai-chat:gpt-6-luna")
-
-    return
-
-
-@app.cell
-def _():
     return
 
 

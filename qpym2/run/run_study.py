@@ -57,6 +57,48 @@ def parse_args():
         help="Save <study_name>.manifest JSON file to the study directory",
     )
     parser.add_argument(
+        "--check-fits",
+        action="store_true",
+        default=False,
+        help="Check and print fit completion status for all study points",
+    )
+    parser.add_argument(
+        "--run-fits",
+        action="store_true",
+        default=False,
+        help="Execute MCMC Bayesian fits across all study points",
+    )
+    parser.add_argument(
+        "--force-fits",
+        action="store_true",
+        default=False,
+        help="Overwrite existing fits even if cached",
+    )
+    parser.add_argument(
+        "--save-trace",
+        action="store_true",
+        default=False,
+        help="Persist full ArviZ posterior traces (.nc)",
+    )
+    parser.add_argument(
+        "--collect-results",
+        action="store_true",
+        default=False,
+        help="Collect completed fit metrics into results.csv and SQLite",
+    )
+    parser.add_argument(
+        "--prior-width", choices=["5sig", "10sig", "syst", "2syst"], default="5sig",
+        help="Prior width mode",
+    )
+    parser.add_argument(
+        "--chains", type=int, default=8,
+        help="Number of MCMC chains",
+    )
+    parser.add_argument(
+        "--draws", type=int, default=20000,
+        help="Number of MCMC draws per chain",
+    )
+    parser.add_argument(
         "-o", "--override",
         dest="overrides",
         action="append",
@@ -94,8 +136,35 @@ def main():
         print(f"[INFO] Generating inputs (overwrite={args.overwrite_inputs})...")
         study.generate_inputs(overwrite=args.overwrite_inputs, verbose=args.verbose)
 
-    # 3. Always print input status report (unless only save_manifest was explicitly asked)
-    study.print_input_status()
+    # 3. Print input status report
+    if args.check_inputs or (not args.check_fits and not args.run_fits and not args.collect_results):
+        study.print_input_status()
+
+    # 4. Fit execution if requested
+    if args.run_fits:
+        print(f"[INFO] Running fits across study points (force={args.force_fits})...")
+        study.run_fits(
+            save_trace=args.save_trace,
+            force=args.force_fits,
+            chains=args.chains,
+            draws=args.draws,
+            prior_width=args.prior_width,
+            verbose=args.verbose,
+        )
+
+    # 5. Check fit completion status if requested
+    if args.check_fits or args.run_fits:
+        study.print_fit_status()
+
+    # 6. Result collection into results.csv
+    if args.collect_results or args.run_fits:
+        print("[INFO] Collecting results into results.csv...")
+        res_df = study.collect_results(
+            prior_width=args.prior_width,
+            chains=args.chains,
+            draws=args.draws,
+        )
+        print(f"[INFO] Result summary:\n{res_df}")
 
 
 if __name__ == "__main__":
