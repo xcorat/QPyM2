@@ -28,6 +28,7 @@ from qpym2.cfg.config_builders_new import (
     get_model_storage_coords,
     get_h2uv_model,
     get_jags_path,
+    get_staging_dir,
 )
 from qpym2.io import staging
 from qpym2.io.bkg_model import read_jagsh5
@@ -359,7 +360,7 @@ def create_storage_inputs_for_point(
     """
     coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key)
     staging_id = str(getattr(getattr(cfg, 'staging', None), 'version', 'v1'))
-    staging_dir = Path(cfg.infrastructure.output_paths.staging_dir)
+    staging_dir = Path(get_staging_dir(cfg))
     treename = str(cfg.qroot.output_tree_name)
     jags_fpath = get_jags_path(cfg)
 

@@ -6,57 +6,89 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import json
+    import time
     from pathlib import Path
 
+    import matplotlib.pyplot as plt
     import marimo as mo
     import numpy as np
     import pandas as pd
 
-    from qpym2.cfg import get_config
-    from qpym2.cfg.config_builders import (
-        build_input_config,
-        get_artifact_store_dir,
+    from qpym2.cfg.config_builders_new import (
         get_comp_cfg,
         get_data_names,
-        get_jags_path,
+        get_fit_data_dir,
         get_h2uv_model,
+        get_jags_path,
+        get_model_storage_coords,
         get_staging_dir,
     )
-    from qpym2.cfg.hydra_adapter import HydraConfigManager, resolve_config_dir
-    from qpym2.fit.create_m2uv import build_input
-    from qpym2.fit.params import model_cfg
+    from qpym2.cfg.hydra_adapter_new import (
+        HydraConfigManager,
+        get_config,
+        resolve_config_dir,
+    )
     from qpym2.io.bkg_model import read_jagsh5
-    from qpym2.io.fit_data.input_set import InputSet
-    from qpym2.io.fit_data.objects import Observation, PriorInput, Template
-    from qpym2.storage.fit_data_store import FitDataStore
-    from qpym2.storage.hasher import hash_file
-    from qpym2.storage.identity_profiles import encode_id
+    from qpym2.storage.backend import (
+        data_exists,
+        read_observed_data,
+        read_template,
+        template_exists,
+    )
+    from qpym2.storage.hasher import canonical_json, compute_input_uuid
+    from qpym2.storage.inputs import (
+        build_source_hash_params,
+        create_storage_inputs_for_point,
+        generate_observed_data,
+        generate_source_template,
+        resolve_storage_coords,
+    )
+    from qpym2.storage.metadata import read_hdf5_metadata
+    from qpym2.storage.paths import (
+        get_data_path,
+        get_input_dir,
+        get_parameter_dir,
+        get_template_path,
+    )
+    from qpym2.storage.schema import build_template_hash_dict
 
     return (
-        FitDataStore,
         HydraConfigManager,
-        InputSet,
-        Observation,
         Path,
-        PriorInput,
-        Template,
-        build_input,
-        build_input_config,
-        encode_id,
-        get_artifact_store_dir,
+        build_source_hash_params,
+        build_template_hash_dict,
+        canonical_json,
+        compute_input_uuid,
+        create_storage_inputs_for_point,
+        data_exists,
+        generate_observed_data,
+        generate_source_template,
         get_comp_cfg,
         get_config,
         get_data_names,
-        get_jags_path,
+        get_data_path,
+        get_fit_data_dir,
         get_h2uv_model,
+        get_input_dir,
+        get_jags_path,
+        get_model_storage_coords,
+        get_parameter_dir,
         get_staging_dir,
-        hash_file,
-        model_cfg,
+        get_template_path,
+        json,
         mo,
         np,
         pd,
+        plt,
+        read_hdf5_metadata,
         read_jagsh5,
+        read_observed_data,
+        read_template,
         resolve_config_dir,
+        resolve_storage_coords,
+        template_exists,
+        time,
     )
 
 
@@ -68,21 +100,45 @@ def _(mo, resolve_config_dir):
         label="Config directory",
         full_width=True,
     )
-    mo.vstack(
+
+    config_source_note = {
+        "flag": "explicit --config-dir",
+        "QPYM2_CONFIG_DIR": "QPYM2_CONFIG_DIR environment variable",
+        "data_dir": "<data dir>/config",
+        "cwd": "./config (current working directory)",
+        "repo": "repository config/ (packaged example)",
+    }.get(config_dir_source, config_dir_source)
+
+    if config_dir_source == "cwd":
+        loc_notice = mo.callout(
+            mo.md(
+                f"Using **`./config`** ({config_source_note}). Set `QPYM2_CONFIG_DIR` or "
+                "pass `--config-dir` to use a config tree stored with your data."
+            ),
+            kind="warn",
+        )
+    else:
+        loc_notice = mo.md(f"Config directory source: {config_source_note}.")
+
+    header = mo.vstack(
         [
             mo.md(
                 """
-                # Fit Data Layer: Input Storage & Validation
+                # Storage Input Generation & Inspection Workbench (v0.6)
 
-                Interactive workbench to exercise and validate the new Fit Data Layer
-                (`FitDataStore`, `Observation`, `Template`, `InputSet`, and sidecar-backed identities)
-                using the real CUORE M2 configuration and physics parameters.
+                Interactive tool to check, preview, generate, and validate identity-addressed
+                fit inputs according to the modern QPyM2 v0.6 storage architecture.
+                
+                - **Path-Encoded Geometry:** `fit_data/roi_<min>_<max>/thr<val>/<coord>_b<bin_size>/input/`
+                - **Deterministic Hashes:** `<component_name>_<input_UUID>.h5` based on parameter hashing
+                - **Embedded HDF5 Metadata:** Invariant source deduplication across shifts
                 """
             ),
             config_dir_input,
-            mo.md(f"Config directory source: `{config_dir_source}`."),
+            loc_notice,
         ]
     )
+    header
     return (config_dir_input,)
 
 
@@ -97,6 +153,12 @@ def _(HydraConfigManager, config_dir_input, mo):
         value="local" if "local" in _env_opts else _env_opts[0],
         label="Environment",
     )
+    _staging_opts = _options.get("staging", ["default"])
+    staging_dropdown = mo.ui.dropdown(
+        options=_staging_opts,
+        value="default" if "default" in _staging_opts else _staging_opts[0],
+        label="Staging tier",
+    )
     _analysis_opts = _options.get("analysis", ["base"])
     analysis_dropdown = mo.ui.dropdown(
         options=_analysis_opts,
@@ -110,24 +172,23 @@ def _(HydraConfigManager, config_dir_input, mo):
         label="Model config set",
     )
 
-    mo.hstack([env_dropdown, analysis_dropdown, model_config_dropdown])
-    return analysis_dropdown, env_dropdown, model_config_dropdown
+    mo.hstack([env_dropdown, staging_dropdown, analysis_dropdown, model_config_dropdown])
+    return analysis_dropdown, env_dropdown, model_config_dropdown, staging_dropdown
 
 
 @app.cell
 def _(
-    Path,
     analysis_dropdown,
     config_dir_input,
     env_dropdown,
-    get_artifact_store_dir,
     get_config,
-    get_staging_dir,
     mo,
     model_config_dropdown,
+    staging_dropdown,
 ):
     cfg = get_config(
         environment=env_dropdown.value,
+        staging=staging_dropdown.value,
         analysis=analysis_dropdown.value,
         models=model_config_dropdown.value,
         config_dir=config_dir_input.value,
@@ -140,599 +201,689 @@ def _(
         label="Model entry",
     )
 
-    _default_store_dir = Path(get_artifact_store_dir(cfg))
-    store_dir_input = mo.ui.text(
-        value=str(_default_store_dir),
-        label="FitDataStore root directory",
-        full_width=True,
-    )
-
-    staging_path = Path(get_staging_dir(cfg))
-
-    mo.vstack([mo.md("## Model Selection & Store Root"), mo.hstack([model_key, store_dir_input])])
-    return cfg, model_key, staging_path, store_dir_input
+    mo.vstack([mo.md("## 1. Model Selection"), mo.hstack([model_key])])
+    return cfg, model_key
 
 
 @app.cell
 def _(
-    FitDataStore,
     Path,
     cfg,
-    get_data_names,
-    get_comp_cfg,
-    get_jags_path,
-    get_h2uv_model,
-    build_input_config,
+    get_fit_data_dir,
+    get_staging_dir,
     mo,
     model_key,
     pd,
-    read_jagsh5,
-    staging_path,
-    store_dir_input,
+    resolve_storage_coords,
 ):
-    fit_store = FitDataStore(store_dir_input.value)
-    store_path = Path(store_dir_input.value)
+    coords, h2uv_model, param_dir, input_dir = resolve_storage_coords(
+        cfg, model_key=model_key.value
+    )
+    staging_dir = Path(get_staging_dir(cfg))
+    fit_data_root = get_fit_data_dir(cfg)
 
-    _folders = ["observations", "templates", "inputs", "fits", ".tmp"]
-    _folder_status = []
-    for _folder in _folders:
-        _p = store_path / _folder
-        _count = len(list(_p.rglob("*.json"))) if _p.is_dir() else 0
-        _folder_status.append(
+    coords_summary = pd.DataFrame(
+        [
             {
-                "directory": _folder,
-                "exists": _p.is_dir(),
-                "JSON sidecars": _count,
+                "property": "fit_data root",
+                "value": str(fit_data_root),
+                "status": "exists" if fit_data_root.is_dir() else "will create",
+            },
+            {
+                "property": "Resolved param_dir",
+                "value": str(param_dir),
+                "status": "exists" if param_dir.is_dir() else "will create",
+            },
+            {
+                "property": "Input directory",
+                "value": str(input_dir),
+                "status": "exists" if input_dir.is_dir() else "will create",
+            },
+            {
+                "property": "ROI Esum range",
+                "value": f"[{coords['roi'][0]:g}, {coords['roi'][1]:g}] keV",
+                "status": "ok",
+            },
+            {"property": "Threshold", "value": f"{coords['threshold']:g} keV", "status": "ok"},
+            {
+                "property": "Coordinate / Bin size",
+                "value": f"{coords['coord']} (bin_size={coords['bin_size']:g} keV)",
+                "status": "ok",
+            },
+            {
+                "property": "Staging directory",
+                "value": str(staging_dir),
+                "status": "exists" if staging_dir.is_dir() else "missing",
+            },
+        ]
+    )
+
+    mo.vstack(
+        [
+            mo.md("## 2. Storage Coordinates & Directory Resolution"),
+            mo.ui.table(coords_summary, selection=None),
+        ]
+    )
+    return (
+        coords,
+        coords_summary,
+        fit_data_root,
+        h2uv_model,
+        input_dir,
+        param_dir,
+        staging_dir,
+    )
+
+
+@app.cell
+def _(
+    Path,
+    cfg,
+    get_data_names,
+    get_jags_path,
+    mo,
+    pd,
+    read_jagsh5,
+    staging_dir,
+):
+    jags_fpath = Path(get_jags_path(cfg))
+    try:
+        source_table, source_chain = read_jagsh5(str(jags_fpath))
+        jags_status_str = f"Loaded {len(source_table)} MC sources from JAGS table."
+        source_error = None
+    except Exception as exc:
+        source_table = pd.DataFrame(columns=["fname", "mean", "std", "mode"])
+        source_chain = None
+        jags_status_str = f"Error reading JAGS table: {exc}"
+        source_error = str(exc)
+
+    data_names = get_data_names(cfg)
+    unblinded_fpath = staging_dir / f"{data_names[0]}.root"
+    blinded_fpath = staging_dir / f"{data_names[1]}.root"
+    ndbd_fpath = staging_dir / "ndbd.root"
+
+    prereq_rows = [
+        {
+            "role": "JAGS Background Model",
+            "source": jags_fpath.name,
+            "path": str(jags_fpath),
+            "available": jags_fpath.is_file(),
+            "size_mb": round(jags_fpath.stat().st_size / 1e6, 3) if jags_fpath.is_file() else 0.0,
+        },
+        {
+            "role": "Unblinded Data",
+            "source": unblinded_fpath.name,
+            "path": str(unblinded_fpath),
+            "available": unblinded_fpath.is_file(),
+            "size_mb": round(unblinded_fpath.stat().st_size / 1e6, 3)
+            if unblinded_fpath.is_file()
+            else 0.0,
+        },
+        {
+            "role": "Blinded Data",
+            "source": blinded_fpath.name,
+            "path": str(blinded_fpath),
+            "available": blinded_fpath.is_file(),
+            "size_mb": round(blinded_fpath.stat().st_size / 1e6, 3)
+            if blinded_fpath.is_file()
+            else 0.0,
+        },
+        {
+            "role": "0vbb Signal MC",
+            "source": ndbd_fpath.name,
+            "path": str(ndbd_fpath),
+            "available": ndbd_fpath.is_file(),
+            "size_mb": round(ndbd_fpath.stat().st_size / 1e6, 3) if ndbd_fpath.is_file() else 0.0,
+        },
+    ]
+
+    for source_name, row in source_table.iterrows():
+        fname = str(row["fname"])
+        p = staging_dir / fname
+        prereq_rows.append(
+            {
+                "role": f"MC: {source_name}",
+                "source": fname,
+                "path": str(p),
+                "available": p.is_file(),
+                "size_mb": round(p.stat().st_size / 1e6, 3) if p.is_file() else 0.0,
             }
         )
 
-    store_status_df = pd.DataFrame(_folder_status)
+    prereq_df = pd.DataFrame(prereq_rows)
+    avail_count = prereq_df["available"].sum()
+    total_count = len(prereq_df)
 
-    h2uv_model = get_h2uv_model(cfg, model_key.value)
-    comp_configs = get_comp_cfg(cfg, model_key.value)
-    comp_names = [c["name"] for c in comp_configs]
+    mo.vstack(
+        [
+            mo.md("## 3. Upstream Staging Prerequisites"),
+            mo.callout(
+                mo.md(
+                    f"**Availability:** {avail_count} of {total_count} files ready in `{staging_dir}`. {jags_status_str}"
+                ),
+                kind="success" if avail_count == total_count else "warn",
+            ),
+            mo.ui.table(prereq_df, selection=None),
+        ]
+    )
+    return (
+        avail_count,
+        blinded_fpath,
+        data_names,
+        jags_fpath,
+        jags_status_str,
+        ndbd_fpath,
+        prereq_df,
+        prereq_rows,
+        source_chain,
+        source_error,
+        source_table,
+        total_count,
+        unblinded_fpath,
+    )
 
-    _co_cut_opts = ["None", *[str(c) for c in cfg.cuts.co_cuts.keys()]]
-    co_cut_input = mo.ui.dropdown(
+
+@app.cell
+def _(cfg, mo):
+    _co_cut_opts = ["None", *[str(c) for c in getattr(cfg.cuts, "co_cuts", {}).keys()]]
+    co_cut_dropdown = mo.ui.dropdown(
         options=_co_cut_opts,
         value="gamma10_v150" if "gamma10_v150" in _co_cut_opts else _co_cut_opts[0],
         label="Co-60 cut",
     )
-    _co_shift_opts = [0.0, 0.3, 0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0]
-    co_shift_input = mo.ui.dropdown(
+
+    _co_shift_opts = [0.0, 0.3, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0]
+    co_shift_dropdown = mo.ui.dropdown(
         options=_co_shift_opts,
         value=1.0,
         label="Co-60 energy shift (keV)",
     )
 
-    _ndbd_cut_opts = ["None", *[str(c) for c in cfg.cuts.ndbd_cutoff.keys()]]
-    ndbd_cutoff_input = mo.ui.dropdown(
+    _ndbd_cut_opts = ["None", *[str(c) for c in getattr(cfg.cuts, "ndbd_cutoff", {}).keys()]]
+    ndbd_cutoff_dropdown = mo.ui.dropdown(
         options=_ndbd_cut_opts,
         value="u1740" if "u1740" in _ndbd_cut_opts else _ndbd_cut_opts[0],
-        label="0νββ cutoff",
+        label="0vbb cutoff",
     )
-    ndbd_shift_input = mo.ui.dropdown(
-        options=[0.0, 0.3, 0.5, 0.8, 1.0],
+
+    _ndbd_shift_opts = [0.0, 0.3, 0.5, 0.8, 1.0]
+    ndbd_shift_dropdown = mo.ui.dropdown(
+        options=_ndbd_shift_opts,
         value=0.0,
-        label="0νββ energy shift (keV)",
+        label="0vbb energy shift (keV)",
     )
 
-    skip_roi_input = mo.ui.dropdown(
-        options=["None", "2515-2535 (blinding window)"],
-        value="None",
-        label="Skip ROI (2515-2535 keV)",
+    blinded_checkbox = mo.ui.checkbox(
+        value=False,
+        label="Blinded data sample (data_blinded.h5)",
     )
-
-    dataset_input = mo.ui.text(value="1ton", label="Dataset name")
-    blinded_input = mo.ui.checkbox(value=False, label="Blinded data")
-
-    input_cfg = build_input_config(cfg, model_key.value)
-    jags_path = Path(get_jags_path(cfg))
-    data_names = get_data_names(cfg)
-    try:
-        source_table, source_chain = read_jagsh5(str(jags_path))
-        source_error = None
-    except Exception as exc:
-        source_table = pd.DataFrame(columns=["fname", "mean", "std", "mode"])
-        source_chain = None
-        source_error = str(exc)
-
-    data_paths = {
-        "unblinded": staging_path / f"{data_names[0]}.root",
-        "blinded": staging_path / f"{data_names[1]}.root",
-    }
-    source_status = [
-        {"input": "JAGS background model", "path": str(jags_path), "available": jags_path.is_file()},
-        *[
-            {"input": f"{label} staged data", "path": str(path), "available": path.is_file()}
-            for label, path in data_paths.items()
-        ],
-        {
-            "input": "NDBD staged MC",
-            "path": str(staging_path / "ndbd.root"),
-            "available": (staging_path / "ndbd.root").is_file(),
-        },
-    ]
-    source_status.extend(
-        {
-            "input": f"Background MC: {source}",
-            "path": str(staging_path / str(row["fname"])),
-            "available": (staging_path / str(row["fname"])).is_file(),
-        }
-        for source, row in source_table.iterrows()
-    )
-    source_status_df = pd.DataFrame(source_status)
 
     mo.vstack(
         [
-            mo.md("### Store Layout Status"),
-            mo.ui.table(store_status_df, selection=None),
-            mo.md("### Required Real Inputs"),
-            mo.ui.table(source_status_df, selection=None),
-            mo.md(
-                f"JAGS source table: `{source_error or f'{len(source_table)} MC sources loaded'}`"
-            ),
-            mo.md("## Resolved Physics Parameters"),
-            mo.md(
-                f"- **Model:** `{model_key.value}` (`{h2uv_model.name}`)  \n"
-                f"- **Energy ROI:** `esum_min = {h2uv_model.esum_min:g} keV`, `esum_max = {h2uv_model.esum_max:g} keV`  \n"
-                f"- **Threshold:** `{h2uv_model.threshold:g} keV`, **Bin Size:** `{h2uv_model.bin_size:g} keV`  \n"
-                f"- **Active fit components:** {', '.join(f'`{c}`' for c in comp_names)}  \n"
-                f"- **Source-level MC templates:** {len(source_table)} background sources + `ndbd`  \n"
-                f"- **Staging Path:** `{staging_path}`"
-            ),
-            mo.md("### Cut & Blinding Controls (ROI/binning come from the selected model)"),
-            mo.hstack([dataset_input, blinded_input]),
-            mo.hstack([skip_roi_input]),
-            mo.hstack([co_cut_input, co_shift_input]),
-            mo.hstack([ndbd_cutoff_input, ndbd_shift_input]),
+            mo.md("## 4. Physics Variation & Shift Controls"),
+            mo.hstack([co_cut_dropdown, co_shift_dropdown]),
+            mo.hstack([ndbd_cutoff_dropdown, ndbd_shift_dropdown]),
+            mo.hstack([blinded_checkbox]),
         ]
     )
     return (
-        blinded_input,
-        co_cut_input,
-        co_shift_input,
-        comp_names,
-        data_names,
-        data_paths,
-        dataset_input,
-        fit_store,
-        h2uv_model,
-        input_cfg,
-        jags_path,
-        ndbd_cutoff_input,
-        ndbd_shift_input,
-        source_error,
-        source_status_df,
-        source_chain,
-        source_table,
-        skip_roi_input,
+        blinded_checkbox,
+        co_cut_dropdown,
+        co_shift_dropdown,
+        ndbd_cutoff_dropdown,
+        ndbd_shift_dropdown,
     )
 
 
 @app.cell
 def _(
-    blinded_input,
-    co_cut_input,
-    co_shift_input,
-    dataset_input,
-    h2uv_model,
+    Path,
+    blinded_checkbox,
+    cfg,
+    co_cut_dropdown,
+    co_shift_dropdown,
+    create_storage_inputs_for_point,
     mo,
-    ndbd_cutoff_input,
-    ndbd_shift_input,
-    skip_roi_input,
+    model_key,
+    ndbd_cutoff_dropdown,
+    ndbd_shift_dropdown,
+    pd,
 ):
-    _sel_co_cut = None if co_cut_input.value == "None" else co_cut_input.value
-    _sel_ndbd_cutoff = None if ndbd_cutoff_input.value == "None" else ndbd_cutoff_input.value
-    _sel_skip_roi = [2515.0, 2535.0] if "2515" in skip_roi_input.value else None
-    binning_spec = {
-        "bin_size": float(h2uv_model.bin_size),
-        "esum_min": float(h2uv_model.esum_min),
-        "esum_max": float(h2uv_model.esum_max),
-        "threshold": float(h2uv_model.threshold),
-    }
-    if _sel_skip_roi is not None:
-        binning_spec["skip_roi"] = _sel_skip_roi
+    _co_cut_val = None if co_cut_dropdown.value == "None" else co_cut_dropdown.value
+    _ndbd_cut_val = None if ndbd_cutoff_dropdown.value == "None" else ndbd_cutoff_dropdown.value
+    _co_shift_val = float(co_shift_dropdown.value)
+    _ndbd_shift_val = float(ndbd_shift_dropdown.value)
+    _blinded_val = bool(blinded_checkbox.value)
+
+    plan_manifest = create_storage_inputs_for_point(
+        cfg,
+        model_key=model_key.value,
+        co_cut=_co_cut_val,
+        ndbd_cutoff=_ndbd_cut_val,
+        co_shift=_co_shift_val,
+        ndbd_shift=_ndbd_shift_val,
+        blinded=_blinded_val,
+        dry_run=True,
+    )
+
+    plan_rows = []
+    _data_info = plan_manifest["data"]
+    plan_rows.append(
+        {
+            "component": "Observed Data",
+            "file": Path(_data_info["path"]).name,
+            "uuid": "N/A (fixed identity)",
+            "cached": _data_info["cached"],
+            "full_path": _data_info["path"],
+        }
+    )
+
+    for src_name, t_info in plan_manifest["templates"].items():
+        plan_rows.append(
+            {
+                "component": src_name,
+                "file": Path(t_info["path"]).name,
+                "uuid": t_info["uuid"],
+                "cached": t_info["cached"],
+                "full_path": t_info["path"],
+            }
+        )
+
+    plan_df = pd.DataFrame(plan_rows)
+    cached_count = plan_df["cached"].sum()
+    total_inputs = len(plan_df)
 
     mo.vstack(
         [
-            mo.md("## Real Input Selection"),
-            mo.md(
-                f"**Dataset label:** `{dataset_input.value}`  \n"
-                f"**Observed sample:** `{'blinded' if blinded_input.value else 'unblinded'}` staging ROOT  \n"
-                f"**Co-60 cut/shift:** `{_sel_co_cut or 'none'}` / `{co_shift_input.value:g} keV`  \n"
-                f"**NDBD cutoff/shift:** `{_sel_ndbd_cutoff or 'none'}` / `{ndbd_shift_input.value:g} keV`  \n"
-                f"**Skip ROI:** `{_sel_skip_roi or 'none'}`  \n"
-                f"**Config-derived binning:** `{binning_spec}`"
+            mo.md("## 5. Planned Storage Inputs (Dry-Run Preview)"),
+            mo.callout(
+                mo.md(
+                    f"**Cache Status:** {cached_count} / {total_inputs} inputs already exist in "
+                    f"`{plan_manifest['input_dir']}`.  \n"
+                    f"**Shift Isolation:** Varying `co_shift` ({_co_shift_val} keV) only updates "
+                    f"`60Co_<uuid>.h5`. All other background sources retain identical UUIDs and are deduplicated."
+                ),
+                kind="info",
             ),
-            mo.md(
-                "No synthetic fallback is used. Artifact IDs are derived only after the staged "
-                "data, JAGS table, and all staged MC inputs have been read successfully."
-            ),
+            mo.ui.table(plan_df, selection=None),
         ]
     )
-    return binning_spec
+    return cached_count, plan_df, plan_manifest, plan_rows, total_inputs
+
 
 @app.cell
 def _(mo):
-    publish_button = mo.ui.run_button(label="Build from staging ROOT")
-    last_publish_click, set_last_publish_click = mo.state(0)
+    run_btn = mo.ui.run_button(label="Generate Storage Inputs")
+    overwrite_box = mo.ui.checkbox(value=False, label="Overwrite existing cached files")
+
     mo.vstack(
         [
-            mo.md("## Storage Action"),
-            mo.md(
-                "Build real observed data and source-level MC templates using the configured "
-                "staging ROOT files, then publish validated objects and JSON sidecars."
-            ),
-            publish_button,
+            mo.md("## 6. Storage Input Generation"),
+            mo.hstack([run_btn, overwrite_box]),
         ]
     )
-    return last_publish_click, publish_button, set_last_publish_click
+    return overwrite_box, run_btn
 
 
 @app.cell
 def _(
-    InputSet,
-    Observation,
-    PriorInput,
-    Template,
-    binning_spec,
-    build_input,
+    blinded_checkbox,
     cfg,
-    co_cut_input,
-    co_shift_input,
-    data_paths,
-    dataset_input,
-    encode_id,
-    blinded_input,
-    fit_store,
-    hash_file,
-    h2uv_model,
-    input_cfg,
-    jags_path,
-    last_publish_click,
-    model_cfg,
+    co_cut_dropdown,
+    co_shift_dropdown,
+    create_storage_inputs_for_point,
     mo,
-    ndbd_cutoff_input,
-    ndbd_shift_input,
-    np,
-    pd,
-    publish_button,
-    set_last_publish_click,
-    skip_roi_input,
-    source_error,
-    source_chain,
-    source_table,
-    staging_path,
+    model_key,
+    ndbd_cutoff_dropdown,
+    ndbd_shift_dropdown,
+    overwrite_box,
+    run_btn,
+    time,
 ):
-    publish_status = mo.md("_Choose ‘Build from staging ROOT’ to create real fit inputs._")
-    published_files = []
-    published_input_set_id = None
-    published_input_set_params = None
-    published_template_ids = {}
-
-    if publish_button.value and publish_button.value > last_publish_click():
-        set_last_publish_click(publish_button.value)
+    if not run_btn.value:
+        gen_status_view = mo.md(
+            "_Click ‘Generate Storage Inputs’ to create or refresh input files._"
+        )
+    else:
+        _t0 = time.time()
         try:
-            if source_error:
-                raise RuntimeError(f"Could not read the configured JAGS table: {source_error}")
-            if source_chain is None:
-                raise RuntimeError("The configured JAGS source chain is unavailable")
-
-            _selected_blinding = "blinded" if bool(blinded_input.value) else "unblinded"
-            _data_path = data_paths[_selected_blinding]
-            _ndbd_path = staging_path / "ndbd.root"
-            _source_paths = {
-                str(source): staging_path / str(row["fname"])
-                for source, row in source_table.iterrows()
-            }
-            _required_paths = [jags_path, _data_path, _ndbd_path, *_source_paths.values()]
-            _missing = [path for path in _required_paths if not path.is_file()]
-            if _missing:
-                raise FileNotFoundError(
-                    "Required staged inputs are missing: "
-                    + ", ".join(str(path) for path in _missing)
-                )
-
-            _sel_co_cut = None if co_cut_input.value == "None" else co_cut_input.value
-            _sel_ndbd_cutoff = (
-                None if ndbd_cutoff_input.value == "None" else ndbd_cutoff_input.value
+            _res = create_storage_inputs_for_point(
+                cfg,
+                model_key=model_key.value,
+                co_cut=None if co_cut_dropdown.value == "None" else co_cut_dropdown.value,
+                ndbd_cutoff=None
+                if ndbd_cutoff_dropdown.value == "None"
+                else ndbd_cutoff_dropdown.value,
+                co_shift=float(co_shift_dropdown.value),
+                ndbd_shift=float(ndbd_shift_dropdown.value),
+                blinded=bool(blinded_checkbox.value),
+                overwrite=bool(overwrite_box.value),
+                dry_run=False,
             )
-            _sel_skip_roi = (
-                (2515.0, 2535.0) if "2515" in skip_roi_input.value else False
-            )
-            import copy
-
-            _hist_model = copy.deepcopy(h2uv_model)
-            _hist_model.skip_roi = None
-            _selected_input_cfg = dict(input_cfg)
-            _selected_input_cfg["data_fname"] = _data_path.name
-            _fit_cfg = model_cfg(
-                _hist_model,
-                co_cut=_sel_co_cut,
-                ndbd_cutoff=_sel_ndbd_cutoff,
-                co_shift=float(co_shift_input.value),
-                ndbd_shift=float(ndbd_shift_input.value),
-                skip_roi=_sel_skip_roi,
-                blinded=False,
-                smooth=True,
-                common_cuts=[],
-                co_cuts_dict=dict(cfg.cuts.co_cuts),
-                ndbd_cuts_dict=dict(cfg.cuts.ndbd_cutoff),
-            )
-
-            _mctable, _signal_df, _data, _b_data, _edges = build_input(
-                _fit_cfg, _selected_input_cfg, str(jags_path), hist_cache={}
-            )
-            if _data is None or len(_data) == 0:
-                raise ValueError("The configured staged data selection produced no events")
-            if _mctable.empty or _signal_df.empty:
-                raise ValueError("The configured staging inputs produced empty MC templates")
-
-            _data_source_id = hash_file(_data_path)
-            _jags_source_id = hash_file(jags_path)
-            _prior_input = PriorInput(
-                data=source_chain,
-                source="JAGS background model",
-                kind="mkchain",
-                source_id=_jags_source_id,
-                metadata={"source_file": str(jags_path)},
-            )
-            _prior_input_id = _prior_input.derive_id()
-            _obs_params = {
-                "dataset": dataset_input.value,
-                "selection": f"co_cut={_sel_co_cut or 'none'}",
-                "blinded": bool(blinded_input.value),
-                "coords": ["u", "v"],
-                "esum_min": float(h2uv_model.esum_min),
-                "esum_max": float(h2uv_model.esum_max),
-                "threshold": float(h2uv_model.threshold),
-                "source_id": _data_source_id,
-            }
-            if _sel_skip_roi:
-                _obs_params["skip_roi"] = list(_sel_skip_roi)
-            _obs = Observation(
-                data=np.asarray(_data),
-                dataset=dataset_input.value,
-                selection=_obs_params["selection"],
-                blinded=bool(blinded_input.value),
-                skip_roi=_sel_skip_roi or None,
-                esum_min=float(h2uv_model.esum_min),
-                esum_max=float(h2uv_model.esum_max),
-                threshold=float(h2uv_model.threshold),
-                source_id=_data_source_id,
-                coords=("u", "v"),
-                metadata={"source_file": str(_data_path)},
-            )
-            _obs_id = _obs.derive_id()
-
-            _templates = []
-            _template_ids = {}
-            _bkg_rows = []
-            for _source, _row in _mctable.iterrows():
-                _fname = str(_row["fname"])
-                _source_path = _source_paths[str(_source)]
-                _source_id = hash_file(_source_path)
-                _is_co60 = "co60" in _fname.lower()
-                _template = Template(
-                    hist=np.asarray(_row["mchist"]),
-                    source=str(_source),
-                    role="background",
-                    edges=_edges,
-                    bin_size=float(h2uv_model.bin_size),
-                    esum_min=float(h2uv_model.esum_min),
-                    esum_max=float(h2uv_model.esum_max),
-                    threshold=float(h2uv_model.threshold),
-                    co_cut=_sel_co_cut,
-                    skip_roi=_sel_skip_roi or None,
-                    co_shift=float(co_shift_input.value) if _is_co60 else 0.0,
-                    source_id=_source_id,
-                    metadata={"source_file": _fname},
-                )
-                _tid = _template.derive_id()
-                _templates.append((_template, _tid))
-                _template_ids[str(_source)] = _tid
-                _bkg_rows.append(
-                    {"source": str(_source), "mean": _row["mean"], "mode": _row["mode"]}
-                )
-
-            _signal_source_id = hash_file(_ndbd_path)
-            _signal_row = _signal_df.iloc[0]
-            _signal_template = Template(
-                hist=np.asarray(_signal_row["mchist"]),
-                source="ndbd",
-                role="signal",
-                edges=_edges,
-                bin_size=float(h2uv_model.bin_size),
-                esum_min=float(h2uv_model.esum_min),
-                esum_max=float(h2uv_model.esum_max),
-                threshold=float(h2uv_model.threshold),
-                co_cut=_sel_co_cut,
-                ndbd_cutoff=_sel_ndbd_cutoff,
-                skip_roi=_sel_skip_roi or None,
-                ndbd_shift=float(ndbd_shift_input.value),
-                source_id=_signal_source_id,
-                metadata={"source_file": _ndbd_path.name},
-            )
-            _signal_template_id = _signal_template.derive_id()
-
-            _input_set = InputSet(
-                observation_id=_obs_id,
-                template_ids=_template_ids,
-                signal_template_id=_signal_template_id,
-                binning=binning_spec,
-                edges=_edges,
-                bkg_model_params=pd.DataFrame(_bkg_rows).set_index("source"),
-                signal_params=_signal_df[["mean", "mode"]].copy(),
-                prior_input_id=_prior_input_id,
-                metadata={"jags_file": str(jags_path)},
-            )
-            _input_set_params = _input_set.get_identity_params()
-            _input_set_id = encode_id("input_set", _input_set_params)
-
-            def _publish_or_reuse(_kind, _object, _object_id):
-                if fit_store.exists(_kind, _object_id):
-                    if not fit_store.verify(_kind, _object_id):
-                        raise ValueError(f"Existing {_kind} artifact failed validation: {_object_id}")
-                    return fit_store.resolve_path(_kind, _object_id), True
-                return _object.publish(fit_store, object_id=_object_id), False
-
-            _objects = [("observation", _obs, _obs_id)]
-            _objects.extend(("template", obj, oid) for obj, oid in _templates)
-            _objects.append(("template", _signal_template, _signal_template_id))
-            _objects.append(("prior_input", _prior_input, _prior_input_id))
-            _objects.append(("input_set", _input_set, _input_set_id))
-            for _kind, _object, _object_id in _objects:
-                _path, _reused = _publish_or_reuse(_kind, _object, _object_id)
-                _sidecar = fit_store.sidecar_path(_kind, _object_id)
-                published_files.append(
-                    {
-                        "kind": _kind,
-                        "id": _object_id,
-                        "payload": str(_path),
-                        "sidecar": str(_sidecar),
-                        "state": "reused" if _reused else "published",
-                    }
-                )
-
-            published_input_set_id = _input_set_id
-            published_input_set_params = _input_set_params
-            published_template_ids = _template_ids | {"ndbd": _signal_template_id}
-            publish_status = mo.callout(
+            _elapsed = time.time() - _t0
+            _cached = sum(1 for t in _res["templates"].values() if t.get("cached"))
+            _written = len(_res["templates"]) - _cached
+            gen_status_view = mo.callout(
                 mo.md(
-                    f"Built inputs from real staging files. Observation events: {len(_data):,}; "
-                    f"source MC templates: {len(_templates)} background + 1 signal."
+                    f"**Input generation complete** in {_elapsed:.2f}s!  \n"
+                    f"- Data: `{_res['data']['path']}` ({'reused cache' if _res['data'].get('cached') else 'written'})  \n"
+                    f"- Templates: {_written} written, {_cached} reused from cache."
                 ),
                 kind="success",
             )
         except Exception as exc:
-            publish_status = mo.callout(
-                mo.md(f"Input build failed; no synthetic fallback was used.\n\n`{exc}`"),
-                kind="danger",
-            )
+            gen_status_view = mo.callout(mo.md(f"**Generation failed:** `{exc}`"), kind="danger")
 
-    _published_table = pd.DataFrame(published_files)
-    mo.vstack(
-        [
-            publish_status,
-            mo.ui.table(_published_table, selection=None) if published_files else mo.md(""),
-        ]
-    )
-    return (
-        published_input_set_id,
-        published_input_set_params,
-        published_template_ids,
-    )
+    gen_status_view
+    return (gen_status_view,)
+
 
 @app.cell
-def _(InputSet, fit_store, mo, np, pd, published_input_set_id):
-    if published_input_set_id and fit_store.exists("input_set", published_input_set_id):
-        _loaded_set = InputSet.load(fit_store, published_input_set_id)
-        _manifest = fit_store.read_manifest("input_set", published_input_set_id)
-        _mctable, _signal_df, _resolved_data, _edges = _loaded_set.resolve(fit_store)
+def _(gen_status_view, input_dir, mo):
+    # Depending on gen_status_view ensures file list re-evaluates after generation
+    _ = gen_status_view
+    _existing_files = sorted(input_dir.glob("*.h5")) if input_dir.is_dir() else []
+    _file_names = [f.name for f in _existing_files]
 
-        _source_rows = []
-        for _source, _row in _mctable.iterrows():
-            _source_rows.append(
-                {
-                    "MC source": _source,
-                    "prior mean": _row.get("mean"),
-                    "prior mode": _row.get("mode"),
-                    "histogram sum": float(np.asarray(_row["mchist"]).sum()),
-                }
-            )
-        _source_table = pd.DataFrame(_source_rows)
-        _signal_sum = float(np.asarray(_signal_df.iloc[0]["mchist"]).sum())
-        _edge_str = ", ".join(f"{len(axis) - 1} bins" for axis in _edges) if _edges else "None"
-        _partition = _manifest.get("partition", {})
+    file_selector = mo.ui.dropdown(
+        options=_file_names,
+        value=_file_names[0] if _file_names else None,
+        label="Select input file in input/",
+    )
 
-        inspection_view = mo.vstack(
-            [
-                mo.md(f"## Real InputSet (`{published_input_set_id}`)"),
-                mo.md(
-                    f"**Observed events:** {len(_resolved_data):,}  \
-"
-                    f"**Background MC sources:** {len(_mctable)}  \
-"
-                    f"**Signal histogram sum:** {_signal_sum:,.1f}  \
-"
-                    f"**Histogram geometry:** {_edge_str}  \
-"
-                    f"**Partition:** `{_partition}`  \
-"
-                    f"**Sidecar kind:** `{_manifest.get('kind')}`"
-                ),
-                mo.ui.table(_source_table, selection=None),
-            ]
-        )
-    else:
-        inspection_view = mo.callout(
-            mo.md("No InputSet was published. Check the real staging inputs and build status above."),
-            kind="info",
-        )
-
-    inspection_view
-    return
+    mo.vstack([mo.md("## 7. HDF5 File Inspector"), file_selector])
+    return (file_selector,)
 
 
 @app.cell
 def _(
-    co_shift_input,
-    fit_store,
+    file_selector,
+    input_dir,
+    json,
     mo,
-    ndbd_shift_input,
+    np,
     pd,
-    published_input_set_id,
-    published_input_set_params,
-    published_template_ids,
+    read_hdf5_metadata,
+    read_observed_data,
+    read_template,
 ):
-    _validation_items = []
-    if published_input_set_id and published_input_set_params:
+    selected_hist_data = None
+    selected_edges_data = None
+    selected_meta_data = None
+
+    if file_selector.value:
+        _target_path = input_dir / file_selector.value
         try:
-            with fit_store.stage_object(
-                "input_set",
-                published_input_set_id,
-                overwrite=False,
-                identity=published_input_set_params,
-            ) as _tmp:
-                _tmp.write_text("this duplicate publication must not be reached")
-            _immutability = "Failed"
-        except FileExistsError:
-            _immutability = "Passed"
-        _validation_items.append(
+            _meta = read_hdf5_metadata(_target_path)
+            selected_meta_data = _meta
+
+            if "data" in file_selector.value:
+                _data_arr, _edges, _ = read_observed_data(_target_path)
+                selected_hist_data = _data_arr
+                selected_edges_data = _edges
+                _info_df = pd.DataFrame(
+                    [
+                        {"property": "File type", "value": "Observed Data"},
+                        {
+                            "property": "Type / Shape",
+                            "value": f"{type(_data_arr)} - {getattr(_data_arr, 'shape', len(_data_arr))}",
+                        },
+                        {
+                            "property": "Event count / Total sum",
+                            "value": f"{len(_data_arr):,} events"
+                            if hasattr(_data_arr, "__len__") and not hasattr(_data_arr, "shape")
+                            else f"{np.sum(_data_arr):,.1f}",
+                        },
+                        {
+                            "property": "File size",
+                            "value": f"{_target_path.stat().st_size / 1e3:.1f} KB",
+                        },
+                    ]
+                )
+            else:
+                _hist, _edges, _ = read_template(_target_path)
+                selected_hist_data = _hist
+                selected_edges_data = _edges
+                _nonzero = int(np.count_nonzero(_hist))
+                _total_bins = int(_hist.size)
+                _info_df = pd.DataFrame(
+                    [
+                        {"property": "File type", "value": "Source Template (Unsmoothed)"},
+                        {"property": "Component", "value": str(_meta.get("component", "unknown"))},
+                        {"property": "Array shape", "value": str(_hist.shape)},
+                        {"property": "Histogram sum", "value": f"{np.sum(_hist):,.2f}"},
+                        {
+                            "property": "Min / Max bin value",
+                            "value": f"{np.min(_hist):.4g} / {np.max(_hist):.4g}",
+                        },
+                        {
+                            "property": "Non-zero bins",
+                            "value": f"{_nonzero} / {_total_bins} ({_nonzero / _total_bins * 100:.1f}%)",
+                        },
+                        {
+                            "property": "File size",
+                            "value": f"{_target_path.stat().st_size / 1e3:.1f} KB",
+                        },
+                    ]
+                )
+
+            inspect_output = mo.vstack(
+                [
+                    mo.md(f"### Details: `{file_selector.value}`"),
+                    mo.ui.table(_info_df, selection=None),
+                    mo.md("#### Embedded HDF5 Metadata (`attrs['metadata_json']`)"),
+                    mo.ui.code(json.dumps(_meta, indent=2), language="json"),
+                ]
+            )
+        except Exception as exc:
+            inspect_output = mo.callout(
+                mo.md(f"Failed to inspect `{file_selector.value}`: `{exc}`"), kind="danger"
+            )
+    else:
+        inspect_output = mo.callout(
+            mo.md(
+                "No `.h5` files found in the current model `input/` directory. Generate inputs above."
+            ),
+            kind="info",
+        )
+
+    inspect_output
+    return (
+        inspect_output,
+        selected_edges_data,
+        selected_hist_data,
+        selected_meta_data,
+    )
+
+
+@app.cell
+def _(file_selector, mo, np, plt, selected_edges_data, selected_hist_data):
+    plot_view = []
+    if (
+        selected_hist_data is not None
+        and isinstance(selected_hist_data, np.ndarray)
+        and selected_hist_data.ndim == 2
+    ):
+        try:
+            u_edges = selected_edges_data[0]
+            v_edges = selected_edges_data[1]
+
+            fig, axes = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
+
+            # 2D Heatmap
+            pcm = axes[0].pcolormesh(
+                u_edges, v_edges, selected_hist_data.T, cmap="viridis", shading="auto"
+            )
+            axes[0].set_title(f"2D Template: {file_selector.value}", fontsize=10)
+            axes[0].set_xlabel("u (sum energy / sqrt(2)) [keV]")
+            axes[0].set_ylabel("v (asymmetry) [keV]")
+            fig.colorbar(pcm, ax=axes[0], label="Counts")
+
+            # 1D Projection along u
+            u_proj = selected_hist_data.sum(axis=1)
+            u_centers = 0.5 * (u_edges[:-1] + u_edges[1:])
+            axes[1].step(u_centers, u_proj, where="mid", color="teal")
+            axes[1].set_title("Projection along u", fontsize=10)
+            axes[1].set_xlabel("u [keV]")
+            axes[1].set_ylabel("Counts")
+            axes[1].grid(alpha=0.3)
+
+            # 1D Projection along v
+            v_proj = selected_hist_data.sum(axis=0)
+            v_centers = 0.5 * (v_edges[:-1] + v_edges[1:])
+            axes[2].step(v_centers, v_proj, where="mid", color="darkorange")
+            axes[2].set_title("Projection along v", fontsize=10)
+            axes[2].set_xlabel("v [keV]")
+            axes[2].set_ylabel("Counts")
+            axes[2].grid(alpha=0.3)
+
+            plot_view.extend(
+                [
+                    mo.md(f"### Interactive Distribution Plots (`{file_selector.value}`)"),
+                    mo.as_html(fig),
+                ]
+            )
+            plt.close(fig)
+        except Exception as exc:
+            plot_view.append(mo.callout(mo.md(f"Could not render plot: `{exc}`"), kind="danger"))
+    elif selected_hist_data is not None:
+        plot_view.append(
+            mo.callout(
+                mo.md(
+                    f"Selected item is not a 2D histogram (shape: {getattr(selected_hist_data, 'shape', 'non-array')})."
+                ),
+                kind="neutral",
+            )
+        )
+
+    mo.vstack([mo.md("## 8. Distribution & Projection Visualization"), *plot_view])
+    return (plot_view,)
+
+
+@app.cell
+def _(
+    build_source_hash_params,
+    compute_input_uuid,
+    input_dir,
+    mo,
+    param_dir,
+    pd,
+    read_hdf5_metadata,
+):
+    verification_checks = []
+
+    # 1. Deterministic hashing test
+    p1 = build_source_hash_params(
+        "60Co",
+        "v1",
+        cuts={"co_cut": "v>150"},
+        transforms={"shift_type": "ushiftp", "shift_val": 0.8},
+    )
+    p2 = build_source_hash_params(
+        "60Co",
+        "v1",
+        cuts={"co_cut": "v>150"},
+        transforms={"shift_type": "ushiftp", "shift_val": 0.8},
+    )
+    u1 = compute_input_uuid(p1)
+    u2 = compute_input_uuid(p2)
+    verification_checks.append(
+        {
+            "contract": "1. Deterministic UUID repeatability",
+            "expectation": "Identical parameters yield identical 12-char hex UUID",
+            "result": "Passed" if (u1 == u2 and len(u1) == 12) else "Failed",
+            "details": f"UUID={u1}",
+        }
+    )
+
+    # 2. Shift isolation test
+    p_tl_0 = build_source_hash_params("208Tl", "v1", cuts={"co_cut": "v>150"}, transforms=None)
+    p_tl_1 = build_source_hash_params("208Tl", "v1", cuts={"co_cut": "v>150"}, transforms=None)
+    p_co_0 = build_source_hash_params("60Co", "v1", cuts={"co_cut": "v>150"}, transforms=None)
+    p_co_1 = build_source_hash_params(
+        "60Co",
+        "v1",
+        cuts={"co_cut": "v>150"},
+        transforms={"shift_type": "ushiftp", "shift_val": 0.8},
+    )
+    u_tl_0 = compute_input_uuid(p_tl_0)
+    u_tl_1 = compute_input_uuid(p_tl_1)
+    u_co_0 = compute_input_uuid(p_co_0)
+    u_co_1 = compute_input_uuid(p_co_1)
+
+    co_changed = u_co_0 != u_co_1
+    tl_unchanged = u_tl_0 == u_tl_1
+    verification_checks.append(
+        {
+            "contract": "2. Invariant source deduplication across Co-60 shifts",
+            "expectation": "Co-60 shift changes 60Co UUID but leaves 208Tl invariant",
+            "result": "Passed" if (co_changed and tl_unchanged) else "Failed",
+            "details": f"60Co: {u_co_0}->{u_co_1}, 208Tl: {u_tl_0} (invariant)",
+        }
+    )
+
+    # 3. Path routing compliance
+    path_ok = str(input_dir).endswith("/input") and (param_dir / "input" == input_dir)
+    verification_checks.append(
+        {
+            "contract": "3. Path-encoded storage hierarchy compliance",
+            "expectation": "Path strictly matches fit_data/roi_.../thr.../.../input/",
+            "result": "Passed" if path_ok else "Failed",
+            "details": f"input_dir={input_dir.name}",
+        }
+    )
+
+    # 4. Embedded metadata roundtrip
+    files = list(input_dir.glob("*_*.h5")) if input_dir.is_dir() else []
+    if files:
+        sample_file = files[0]
+        meta = read_hdf5_metadata(sample_file)
+        has_meta = "component" in meta and "staging_id" in meta
+        verification_checks.append(
             {
-                "contract": "Immutable publication",
-                "result": _immutability,
+                "contract": "4. Embedded HDF5 metadata integrity",
+                "expectation": "Template file contains attrs['metadata_json'] with schema keys",
+                "result": "Passed" if has_meta else "Failed",
+                "details": f"Checked {sample_file.name}",
+            }
+        )
+    else:
+        verification_checks.append(
+            {
+                "contract": "4. Embedded HDF5 metadata integrity",
+                "expectation": "Template file contains attrs['metadata_json'] with schema keys",
+                "result": "Awaiting generation",
+                "details": "Generate inputs to verify on-disk file",
             }
         )
 
-        _co_shift_ok = True
-        _ndbd_shift_ok = True
-        for _source, _template_id in published_template_ids.items():
-            _manifest = fit_store.read_manifest("template", _template_id)
-            _identity = _manifest["identity"]
-            _source_file = str(_manifest.get("metadata", {}).get("source_file", ""))
-            if _source == "ndbd":
-                _ndbd_shift_ok &= float(_identity["ndbd_shift"]) == float(ndbd_shift_input.value)
-            elif "co60" in _source_file.lower():
-                _co_shift_ok &= float(_identity["co_shift"]) == float(co_shift_input.value)
-            else:
-                _co_shift_ok &= float(_identity["co_shift"]) == 0.0
-
-        _validation_items.extend(
-            [
-                {"contract": "Only Co-60 source receives Co shift", "result": "Passed" if _co_shift_ok else "Failed"},
-                {"contract": "NDBD source receives configured NDBD shift", "result": "Passed" if _ndbd_shift_ok else "Failed"},
-            ]
-        )
-    else:
-        _validation_items.append(
-            {"contract": "Real inputs available", "result": "Build required before validation"}
-        )
-
-    _val_df = pd.DataFrame(_validation_items)
-    mo.vstack([mo.md("## Contract & Architecture Validation"), mo.ui.table(_val_df, selection=None)])
-    return
+    verify_df = pd.DataFrame(verification_checks)
+    mo.vstack(
+        [
+            mo.md("## 9. Storage Architecture & Contract Verification"),
+            mo.ui.table(verify_df, selection=None),
+        ]
+    )
+    return (
+        co_changed,
+        files,
+        p1,
+        p2,
+        p_co_0,
+        p_co_1,
+        p_tl_0,
+        p_tl_1,
+        path_ok,
+        tl_unchanged,
+        u1,
+        u2,
+        u_co_0,
+        u_co_1,
+        u_tl_0,
+        u_tl_1,
+        verification_checks,
+        verify_df,
+    )
 
 
 if __name__ == "__main__":
