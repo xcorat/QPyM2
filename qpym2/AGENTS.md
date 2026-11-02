@@ -16,6 +16,7 @@ canonical test/lint commands. This file maps the package.
 | `plotting/` | Plot helpers (library only, no CLI) | `posterior_plots.py`, `projection_plots.py`, `post2.py`, `syst_posterior.py`, `data_plots.py` |
 | `utils/` | Shared utilities | `logging.py`, `hists.py`, `hist_model.py`, `pool.py`, `mathy.py`, `hw.py`, `TempConfig.py` |
 | `core/` | Lower-level ROOT/hist primitives | `qroot.py`, `hists.py` |
+| `storage/` | Data storage layout, hashing, HDF5 metadata, and study indexing | `schema.py`, `hasher.py`, `paths.py`, `backend.py`, `study.py` |
 | `tests/` | Test suite | see root `AGENTS.md` "Testing" |
 
 ## Conventions

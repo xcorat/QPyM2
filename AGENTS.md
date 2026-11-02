@@ -152,7 +152,8 @@ use git branches or a scratch directory instead.
 Canonical modules to prefer: `run_create_staging.py`, `run_create_input.py`,
 `run_single_fit.py`, `run_fits.py`, `io/hdf.py`, `io/rdf.py`,
 `io/staging.py`, `fit/create_m2uv.py`, `fit/params.py`, `fit/fit.py`,
-`models/m2.py`, `cfg/hydra_adapter.py`, `cfg/config_builders.py`.
+`models/m2.py`, `cfg/hydra_adapter.py`, `cfg/config_builders.py`,
+`storage/paths.py`, `storage/backend.py`, `storage/hasher.py`, `storage/study.py`.
 
 ## Repository state
 

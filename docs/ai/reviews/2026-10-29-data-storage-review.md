@@ -9,36 +9,59 @@
 staging/<component_name.root>
 
 fit_data/
-  h2uv/
+  roi_2400_2570/thr200/h2uv_b2.5/
     input/
-      1ton_data.h5
-      1ton_data_blinded.h5
-    roi_2400_2570/thr200/b2.5/smoothed/
-      input/
-        <study_UUID_component_name>.h5
-      output/
-        <study_UUID>/...
-      studies/
-        <study-name>.sqlite
-        <study-name>.manifest
+      data.h5
+      data_blinded.h5
+      <component_name>_<input_UUID>.h5
+    output/
+      fit_<output_UUID>.h5
+      fit_<output_UUID>.nc             # optional: traces retained for selected fits only
+  studies/
+    <study-name>/
+      <study-name>.manifest
+      <study-name>.sqlite
+      results.csv                      # aggregated summary statistics across study points
+      plots/                           # comparative study plots, pulls, systematic scans
 ```
 
-`staging/` holds the staged ROOT files. The `fit_data/h2uv/` subtree contains all fit data, templates, outputs, and study records for the `h2uv` coordinate system. Other coordinate systems get their own subtree and do not share inputs with `h2uv`.
+`staging/` holds the staged ROOT files. The parameter subtree contains input products and fit outputs for the specified ROI, threshold, coordinate system, and binning. The coordinate system and binning are combined in one directory name (for example, `h2uv_b2.5`); other coordinate-system/binning combinations get their own subtrees and do not share coordinate-specific inputs.
 
-The coordinate system, ROI, threshold, binning, and smoothing directories represent coordinates that define distinct template-histogram families. Inputs from different coordinate systems are never shared. Other coordinates are not added to this directory path; the study UUID distinguishes them, including cases where configurations share some template data. For example, a component file may be named `Muons_e4553df.h5`. The UUID is constructed from the relevant coordinates not represented by the directory structure.
+Binned observed-data histograms (`data.h5` and `data_blinded.h5`) are stored alongside the component templates in the parameter-level `input/` directory, matching the exact ROI and binning geometry.
 
-The `output/<study_UUID>/` directory contains outputs for that study point. The study SQLite database records all relevant point IDs and their coordinates, and may include references to fit, toy, systematic, or plot results. The accompanying manifest provides a readable description of the study.
+The path records the selected ROI, threshold, coordinate system, and binning. Other input parameters distinguish input products via `input_UUID`, which is a deterministic hash derived from the relevant resolved parameters not represented in the path (e.g., energy shifts, active cuts, cutoffs). Thus multiple iterations of the same component can coexist, for example as `Co60_<input_UUID>.h5` or `Muons_<input_UUID>.h5`. Metadata in each HDF5 remains the complete record of resolved settings and provenance; the UUID in the filename provides a unique, reproducible filesystem address.
 
-## Coordinate decisions
+Outputs are flat files directly under `output/`, named `fit_<output_UUID>.h5`, where `<output_UUID>` is a deterministic hash of the point and method settings affecting that fit. Posterior traces (`fit_<output_UUID>.nc`) are written only for selected fits (e.g., nominal baseline or diagnostic points) rather than all fits, avoiding inode and metadata overhead on shared filesystems.
 
-- **Coordinate system:** include it as a directory level above all fit data, such as `fit_data/h2uv/`. Never share input files across coordinate systems.
-- **`skip_roi` and blinding:** these are data-side settings, not coordinates (for now). Keep them with the selected data's metadata; do not use them to distinguish template inputs.
-- **Bias injection count:** injected signal count `n` may distinguish bias-study points and should be recorded as a study coordinate. The bias-fit `xmin` is a method setting, not a coordinate.
+Study records, aggregations, and comparative artifacts live under `fit_data/studies/<study-name>/`. A study references input templates and output fits, but output products are not owned or duplicated by a study. The `<study-name>.manifest` describes the study definition and parameter sweep; `<study-name>.sqlite` indexes the mapping between coordinates and input/output artifacts; `results.csv` collects summary statistics; and `plots/` houses comparative figures (pull distributions, parameter scans, systematic deltas).
+
+## Coordinate and product decisions
+
+- **Directory coordinates:** include ROI, threshold, coordinate system, and binning. Combine coordinate system and binning in the directory name, such as `h2uv_b2.5`. Other parameters distinguish products through deterministic UUIDs, not extra directory levels.
+- **Binned data in parameter input:** keep the binned observed-data histograms in the parameter-level `input/` folder alongside templates (`data.h5`, `data_blinded.h5`), avoiding ambiguous global input locations.
+- **Deterministic UUIDs:** `<input_UUID>` and `<output_UUID>` are deterministic hashes generated from canonical parameter strings or matrix keys, guaranteeing cache hits on identical configurations.
+- **Smoothing:** persist the original, unsmoothed template histograms. Apply smoothing during fit construction, not while creating the reusable input/template products; smoothing is a fit-method setting and is not a directory coordinate.
+- **`skip_roi` and blinding:** these are data-side settings for now. Keep them with the selected data's metadata; do not use them to distinguish template inputs.
+- **Bias injection count:** injected signal count `n` may distinguish bias-study points and should be recorded as a study coordinate. Bias-fit `xmin` is a method setting, not a coordinate.
+- **Staging:** remains flat (`staging/<component_name.root>`).
+
+## Study records and concurrent results
+
+The study SQLite database is a collected index, not a shared write target for fit workers. Workers write their own outputs independently; after the study tasks finish, a collection/aggregation step creates or updates the SQLite database, publishes the study manifest, merges summary statistics into `results.csv`, and generates figures under `plots/`. Analysis/query consumers can then treat the completed study records as read-only.
+
+For toy/systematic summaries where full traces are not retained, each task writes a small result file to a unique path (for example, one CSV per task or point). The collector validates and merges these files into `results.csv`, then records the resulting paths and summary metrics in the study database. Do not have workers append concurrently to one shared CSV: concurrent line writes can interleave or lose data. CSV is appropriate for tabular results and quick inspection; SQLite is useful as the collected index for point coordinates, statuses, and links across products.
 
 ## Metadata
 
-Each HDF5 file should include all resolved parameter values, including those not represented in its path, along with relevant input provenance and product-specific settings. The study database and manifest organize points and results; they do not replace the HDF5 metadata.
+Each HDF5 file should include all resolved parameter values, including those not represented in its path or UUID, along with relevant input provenance and product-specific settings. The study database and manifest organize study membership and references; they do not own output products or replace the HDF5 metadata.
 
 ## Implementation note
 
-The storage strategy is intended to be implemented in a new `qpym2/storage/` module, with new run files to create and consume these products. These are planned additions, not current code.
+The storage backend is implemented in `qpym2/storage/`:
+- `paths.py`: Directory hierarchy (`roi_{min}_{max}/thr{val}/{coord}_b{bin_size}/input|output`) and study routing.
+- `schema.py`: Canonical schema normalization for template inputs and fit outputs.
+- `hasher.py`: Deterministic 12-character SHA-256 UUID generation via canonical JSON serialization.
+- `metadata.py`: Full metadata and provenance serialization into HDF5 file-level attributes.
+- `backend.py`: Core I/O routines for composite templates, binned observed data, and fit results (`.h5` and optional `.nc`).
+- `study.py`: Post-run SQLite indexing, manifest publication, and task CSV collection into `results.csv`.
+

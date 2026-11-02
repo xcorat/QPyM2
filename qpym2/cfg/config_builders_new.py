@@ -392,3 +392,21 @@ def get_artifact_store_dir(cfg: DictConfig) -> str:
     """Extract artifact store directory path from Hydra config."""
     raw_path = getattr(cfg.infrastructure.output_paths, 'artifact_store', 'artifact_store')
     return resolve_data_path(cfg, raw_path)
+
+
+def get_fit_data_dir(cfg: DictConfig) -> Path:
+    """Return fit_data directory path from Hydra config."""
+    raw_path = getattr(cfg.infrastructure.output_paths, 'fit_data_dir', 'fit_data')
+    return Path(resolve_data_path(cfg, raw_path))
+
+
+def get_model_storage_coords(cfg: DictConfig, model_key: Optional[str] = None) -> Dict[str, Any]:
+    """Extract model storage coordinates (ROI, threshold, coord, bin_size) from config."""
+    resolved_key = _get_model_key(cfg, model_key)
+    model = cfg.models[resolved_key]
+    return {
+        'roi': (float(model.roi.esum_min), float(model.roi.esum_max)),
+        'threshold': float(model.roi.threshold),
+        'coord': getattr(model, 'coord', 'h2uv'),
+        'bin_size': float(model.binning.bin_size),
+    }

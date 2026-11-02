@@ -24,6 +24,7 @@ infrastructure:
   output_paths:
     staging_dir: "staging"
     fit_dir: "fits"
+    fit_data_dir: "fit_data"
     plots_dir: "plots"
     artifact_store: "artifact_store"
     data_dir: null
