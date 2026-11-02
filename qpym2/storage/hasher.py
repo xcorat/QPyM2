@@ -47,7 +47,10 @@ def hash_dict(data: Dict[str, Any], length: int = 12) -> str:
 
 def compute_input_uuid(template_params: Dict[str, Any], length: int = 12) -> str:
     """
-    Compute deterministic <input_UUID> for a composite template.
+    Compute deterministic <input_UUID> for a template parameter configuration.
+
+    The UUID identifies the parameter set (staging contract, cuts, coordinate transforms).
+    Sources sharing the same parameters share the same <input_UUID>.
 
     Args:
         template_params: Template parameters (from schema.build_template_hash_dict).

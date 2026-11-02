@@ -4,9 +4,7 @@ Pure unit tests for storage input generation routines (qpym2/storage/inputs.py).
 Does not require external NERSC datasets or PyROOT installations.
 """
 
-from pathlib import Path
 import numpy as np
-import pytest
 
 from qpym2.storage.inputs import (
     build_shift_defs,
@@ -52,7 +50,7 @@ def test_source_uuid_isolation():
     assert uuid_co_00 != uuid_co_08
     assert uuid_co_08 != uuid_co_10
 
-    # 2. Invariant sources (208Tl, 238U, ndbd) have no shift
+    # 2. Invariant sources (208Tl, 238U, ndbd, 60Co without shift) have identical params and share the exact same UUID
     p_tl = build_source_hash_params('208Tl', staging_id, cuts=cuts, transforms=None)
     p_u = build_source_hash_params('238U', staging_id, cuts=cuts, transforms=None)
     p_ndbd = build_source_hash_params('ndbd', staging_id, cuts=cuts, transforms=None)
@@ -61,10 +59,10 @@ def test_source_uuid_isolation():
     uuid_u = compute_input_uuid(p_u)
     uuid_ndbd = compute_input_uuid(p_ndbd)
 
-    # Identical repeated calls
-    assert compute_input_uuid(p_tl) == uuid_tl
-    assert compute_input_uuid(p_u) == uuid_u
-    assert compute_input_uuid(p_ndbd) == uuid_ndbd
+    # Identical parameters produce identical UUID across all components
+    assert uuid_tl == uuid_u == uuid_ndbd == uuid_co_00
+    assert uuid_co_08 != uuid_tl
+    assert uuid_co_10 != uuid_tl
 
 
 def test_generate_source_template_roundtrip_and_cache(tmp_path):

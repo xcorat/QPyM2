@@ -20,7 +20,6 @@ Per docs/ai/reviews/2026-10-29-data-storage-review.md:
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
-import pandas as pd
 from omegaconf import DictConfig
 
 from qpym2.cfg.config_builders_new import (
@@ -118,8 +117,8 @@ def build_shift_defs(
 
 
 def build_source_hash_params(
-    component: str,
-    staging_id: str,
+    component: Optional[str] = None,
+    staging_id: str = "v1",
     cuts: Optional[Dict[str, Optional[str]]] = None,
     transforms: Optional[Dict[str, Any]] = None,
     grouping: Optional[Dict[str, Any]] = None,
@@ -128,8 +127,12 @@ def build_source_hash_params(
     """
     Construct canonical dictionary for template parameter hashing.
 
+    The component name is excluded from the hash payload so that all sources
+    sharing identical staging, cuts, and coordinate transforms produce the
+    exact same parameter-set <input_UUID>.
+
     Args:
-        component: Source name (e.g. '60Co', '208Tl', 'ndbd').
+        component: Optional source name (ignored for hashing; retained for backward compatibility).
         staging_id: Staging dataset identifier.
         cuts: Active cuts dictionary affecting this source.
         transforms: Transforms affecting this source.
@@ -234,11 +237,13 @@ def generate_source_template(
         if hist_cache is not None:
             hist_cache[cache_key] = (hist, edges)
 
+    meta_to_write = dict(tpl_params)
+    meta_to_write['component'] = source_name
     write_template(
         target_path,
         hist=hist,
         edges=edges,
-        metadata=tpl_params,
+        metadata=meta_to_write,
         overwrite=overwrite,
     )
     debug(f"[WRITE] Persisted template: {target_path.name}")
@@ -396,13 +401,31 @@ def create_storage_inputs_for_point(
         'data': {},
     }
 
+    # Precompute parameter-level UUIDs
+    p_base = build_source_hash_params(staging_id=staging_id, cuts=common_cuts, transforms=None)
+    uuid_base = compute_input_uuid(p_base)
+
+    if co_shift != 0.0:
+        transforms_co = {'shift_type': 'ushiftp', 'shift_val': co_shift}
+        p_co = build_source_hash_params(staging_id=staging_id, cuts=common_cuts, transforms=transforms_co)
+        uuid_co = compute_input_uuid(p_co)
+    else:
+        transforms_co = None
+        uuid_co = uuid_base
+
+    if ndbd_shift != 0.0:
+        transforms_ndbd = {'shift_type': 'ushiftp', 'shift_val': ndbd_shift}
+        p_ndbd = build_source_hash_params(staging_id=staging_id, cuts=common_cuts, transforms=transforms_ndbd)
+        uuid_ndbd = compute_input_uuid(p_ndbd)
+    else:
+        transforms_ndbd = None
+        uuid_ndbd = uuid_base
+
     if dry_run:
         # Calculate expected UUIDs and paths without I/O
         for source_name in sources:
             is_co = '60Co' in source_name or 'co60' in source_name.lower()
-            transforms = {'shift_type': 'ushiftp', 'shift_val': co_shift} if is_co and co_shift != 0.0 else None
-            p = build_source_hash_params(source_name, staging_id, cuts=common_cuts, transforms=transforms)
-            uuid = compute_input_uuid(p)
+            uuid = uuid_co if is_co else uuid_base
             path = get_template_path(input_dir, source_name, uuid)
             point_manifest['templates'][source_name] = {
                 'path': str(path),
@@ -411,9 +434,6 @@ def create_storage_inputs_for_point(
             }
 
         # NDBD
-        ndbd_transforms = {'shift_type': 'ushiftp', 'shift_val': ndbd_shift} if ndbd_shift != 0.0 else None
-        p_ndbd = build_source_hash_params(_NDBDNAME, staging_id, cuts=common_cuts, transforms=ndbd_transforms)
-        uuid_ndbd = compute_input_uuid(p_ndbd)
         path_ndbd = get_template_path(input_dir, _NDBDNAME, uuid_ndbd)
         point_manifest['templates'][_NDBDNAME] = {
             'path': str(path_ndbd),

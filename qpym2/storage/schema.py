@@ -30,8 +30,8 @@ def normalize_cut_string(cut: Optional[str]) -> Optional[str]:
 
 
 def build_template_hash_dict(
-    component: str,
-    staging_id: str,
+    component: Optional[str] = None,
+    staging_id: str = "v1",
     cuts: Optional[Dict[str, Optional[str]]] = None,
     transforms: Optional[Dict[str, Any]] = None,
     grouping: Optional[Dict[str, Any]] = None,
@@ -39,12 +39,16 @@ def build_template_hash_dict(
     schema_version: int = 1,
 ) -> Dict[str, Any]:
     """
-    Construct canonical dictionary representing a composite template input.
+    Construct canonical dictionary representing template parameter variations.
+
+    The component name is excluded from the hash payload so that all sources
+    sharing identical staging, cuts, and coordinate transforms produce the
+    exact same parameter-set <input_UUID>.
 
     Args:
-        component: Component name (e.g. 'co60', 'u238', 'ndbd').
+        component: Optional component name (ignored for hashing; retained for backward compatibility).
         staging_id: Identifier or contract version of the staging dataset.
-        cuts: Dictionary of cuts affecting this component (e.g. {'common': 'v>150', 'specific': None}).
+        cuts: Dictionary of cuts affecting this variation (e.g. {'common': 'v>150', 'specific': None}).
         transforms: Dictionary of coordinate/energy transforms (e.g. {'shift_type': 'ushiftp', 'shift_val': 0.8}).
         grouping: Grouping rules (e.g. {'filter_regex': '60Co'}).
         norm: JAGS norm mode used for component weighting ('mode', 'mean', etc.).
@@ -73,7 +77,6 @@ def build_template_hash_dict(
 
     return {
         'schema_version': int(schema_version),
-        'component': str(component),
         'staging_id': str(staging_id),
         'cuts': normalized_cuts,
         'transforms': normalized_transforms,

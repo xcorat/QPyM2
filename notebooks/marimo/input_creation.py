@@ -813,12 +813,13 @@ def _(
 
     co_changed = u_co_0 != u_co_1
     tl_unchanged = u_tl_0 == u_tl_1
+    shared_baseline = u_tl_0 == u_co_0
     verification_checks.append(
         {
-            "contract": "2. Invariant source deduplication across Co-60 shifts",
-            "expectation": "Co-60 shift changes 60Co UUID but leaves 208Tl invariant",
-            "result": "Passed" if (co_changed and tl_unchanged) else "Failed",
-            "details": f"60Co: {u_co_0}->{u_co_1}, 208Tl: {u_tl_0} (invariant)",
+            "contract": "2. Parameter-set UUID sharing & shift isolation",
+            "expectation": "Invariant sources share baseline UUID; shifted 60Co receives new UUID",
+            "result": "Passed" if (co_changed and tl_unchanged and shared_baseline) else "Failed",
+            "details": f"Baseline UUID: {u_tl_0} (shared by 208Tl and unshifted 60Co), Shifted 60Co: {u_co_1}",
         }
     )
 

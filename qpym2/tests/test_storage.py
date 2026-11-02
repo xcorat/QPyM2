@@ -107,7 +107,8 @@ def test_schema_and_normalization():
         grouping={"filter_regex": "60Co"},
         norm="mode",
     )
-    assert tpl_dict["component"] == "co60"
+    assert "component" not in tpl_dict
+    assert tpl_dict["staging_id"] == "v5.1"
     assert tpl_dict["cuts"]["common"] == "v>150"
     assert tpl_dict["transforms"]["shift_val"] == 0.8
 
@@ -133,35 +134,23 @@ def test_deterministic_hashing():
     assert hash_dict(d1) == hash_dict(d2)
     assert len(hash_dict(d1, length=12)) == 12
 
-    # Template hashing deduplication check:
-    # co60 with shift 0.0 vs shift 0.8
-    co_shift0 = build_template_hash_dict(
+    # Different components with identical parameters share the exact same UUID
+    p_comp1 = build_template_hash_dict(
         component="co60", staging_id="v5.1",
-        cuts={"common": "v>150"}, transforms={"shift_val": 0.0}
+        cuts={"common": "v>150"}, transforms=None
     )
-    co_shift8 = build_template_hash_dict(
+    p_comp2 = build_template_hash_dict(
+        component="u238", staging_id="v5.1",
+        cuts={"common": "v>150"}, transforms=None
+    )
+    assert compute_input_uuid(p_comp1) == compute_input_uuid(p_comp2)
+
+    # Shifting Co60 produces a new UUID tag for that parameter variation
+    p_comp1_shift8 = build_template_hash_dict(
         component="co60", staging_id="v5.1",
         cuts={"common": "v>150"}, transforms={"shift_val": 0.8}
     )
-    # u238 has no shift transform
-    u_shift0 = build_template_hash_dict(
-        component="u238", staging_id="v5.1",
-        cuts={"common": "v>150"}, transforms=None
-    )
-    u_shift8 = build_template_hash_dict(
-        component="u238", staging_id="v5.1",
-        cuts={"common": "v>150"}, transforms=None
-    )
-
-    uuid_co0 = compute_input_uuid(co_shift0)
-    uuid_co8 = compute_input_uuid(co_shift8)
-    uuid_u0 = compute_input_uuid(u_shift0)
-    uuid_u8 = compute_input_uuid(u_shift8)
-
-    # Co60 UUID must change when shift changes
-    assert uuid_co0 != uuid_co8
-    # U238 UUID must be identical across runs
-    assert uuid_u0 == uuid_u8
+    assert compute_input_uuid(p_comp1_shift8) != compute_input_uuid(p_comp1)
 
 
 def test_template_roundtrip(tmp_path):
