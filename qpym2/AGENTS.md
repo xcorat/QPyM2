@@ -8,7 +8,7 @@ canonical test/lint commands. This file maps the package.
 | Dir | Purpose | Canonical entry points |
 |---|---|---|
 | `cfg/` | Hydra config loading + adapters | `hydra_adapter.py` (`get_config`), `config_builders.py`, `params_grid.py`, `model_utils.py`, `toy_config.py`, `syst_config.py` |
-| `run/` | Pipeline stage runners (argparse `parse_args()`/`main()`) | `run_create_staging.py`, `run_create_input.py`, `run_single_fit.py`, `run_fits.py`, `run_toy_batch.py`, `run_toy_fits.py`, `run_syst_lss.py`, `run_syst_mc.py`, `run_ndbd_shift_syst.py` |
+| `run/` | Pipeline stage runners (argparse `parse_args()`/`main()`) | `run_create_staging.py`, `run_create_input.py`, `run_create_storage_inputs.py`, `run_single_fit.py`, `run_fits.py`, `run_toy_batch.py`, `run_toy_fits.py`, `run_syst_lss.py`, `run_syst_mc.py`, `run_ndbd_shift_syst.py` |
 | `io/` | ROOT / HDF5 / CSV I/O | `rdf.py` (ROOT RDataFrame), `hdf.py` (pandas HDF), `staging_transforms.py`, `csv.py`, `toys.py` |
 | `fit/` | Fit construction, priors, results | `create_m2uv.py`, `params.py`, `fit.py`, `results.py`, `bias.py`, `syst.py`, `syst_lss.py` |
 | `models/` | PyMC model definitions | `m2.py` |
@@ -16,7 +16,7 @@ canonical test/lint commands. This file maps the package.
 | `plotting/` | Plot helpers (library only, no CLI) | `posterior_plots.py`, `projection_plots.py`, `post2.py`, `syst_posterior.py`, `data_plots.py` |
 | `utils/` | Shared utilities | `logging.py`, `hists.py`, `hist_model.py`, `pool.py`, `mathy.py`, `hw.py`, `TempConfig.py` |
 | `core/` | Lower-level ROOT/hist primitives | `qroot.py`, `hists.py` |
-| `storage/` | Data storage layout, hashing, HDF5 metadata, and study indexing | `schema.py`, `hasher.py`, `paths.py`, `backend.py`, `study.py` |
+| `storage/` | Data storage layout, hashing, HDF5 metadata, input generation, and study indexing | `schema.py`, `hasher.py`, `paths.py`, `backend.py`, `inputs.py`, `study.py` |
 | `tests/` | Test suite | see root `AGENTS.md` "Testing" |
 
 ## Conventions

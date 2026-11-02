@@ -41,6 +41,7 @@ scripts/gen_params.py ─► scripts/params/<type>_params.tsv ─► SLURM array
 | Params grid | `scripts/gen_params.py <staging\|input\|fit\|toys\|sens\|bias\|syst_lss\|syst_mc>` | `scripts/params/*.tsv` |
 | Staging | `qpym2/run/run_create_staging.py` | staged `uvtree` ROOT |
 | Fit input | `qpym2/run/run_create_input.py` | `input.h5` |
+| Fit input (storage) | `qpym2/run/run_create_storage_inputs.py` | `fit_data/.../input/*.h5` |
 | Fits | `qpym2/run/run_single_fit.py` (atomic), `qpym2/run/run_fits.py` (local pool) | `fit.nc`, `fit.h5` |
 | Systematics | `qpym2/run/run_syst_lss.py`, `run_syst_mc.py`, `run_ndbd_shift_syst.py` | `.nc` / CSV |
 | Toys/sens/bias | `qpym2/run/run_toy_batch.py` (SLURM task), `run_toy_fits.py` (library) | per-task CSV |
@@ -61,6 +62,7 @@ python scripts/gen_params.py toys --n-fits 200
 # 2. Run one stage locally
 python -m qpym2.run.run_create_staging -e m2v5-1 -a tech_note
 python -m qpym2.run.run_create_input   -e m2v5-1 -a tech_note
+python -m qpym2.run.run_create_storage_inputs -e local -a base -m tech_note_200 --co-shifts 0.0 0.8 1.0 1.2
 python -m qpym2.run.run_single_fit -e m2v5-1 -a tech_note \
     --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000
 python -m qpym2.run.run_fits -p scripts/params/fit_params.tsv --dry-run
@@ -153,7 +155,7 @@ Canonical modules to prefer: `run_create_staging.py`, `run_create_input.py`,
 `run_single_fit.py`, `run_fits.py`, `io/hdf.py`, `io/rdf.py`,
 `io/staging.py`, `fit/create_m2uv.py`, `fit/params.py`, `fit/fit.py`,
 `models/m2.py`, `cfg/hydra_adapter.py`, `cfg/config_builders.py`,
-`storage/paths.py`, `storage/backend.py`, `storage/hasher.py`, `storage/study.py`.
+`storage/paths.py`, `storage/backend.py`, `storage/hasher.py`, `storage/inputs.py`, `storage/study.py`.
 
 ## Repository state
 
