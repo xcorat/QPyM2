@@ -1,0 +1,20 @@
+study:
+  name: example_co_shift
+  description: "Co-60 energy shift validation study across [0.0, 0.8, 1.0, 1.2] keV"
+
+defaults:
+  environment: local
+  staging: default
+  analysis: base
+  models: tech_note
+  model_key: tech_note_200
+
+reference:
+  co_cut: gamma10_v150
+  ndbd_cutoff: u1740
+  co_shift: 0.0
+  ndbd_shift: 0.0
+  blinded: false
+
+sweep:
+  co_shift: [0.0, 0.8, 1.0, 1.2]
