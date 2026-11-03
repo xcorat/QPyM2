@@ -38,9 +38,6 @@ def _():
     )
     from qpym2.storage.inputs import resolve_storage_coords
     from qpym2.storage.paths import (
-        get_data_path,
-        get_fit_path,
-        get_input_dir,
         get_output_dir,
         get_parameter_dir,
     )
@@ -181,8 +178,8 @@ def _(cfg, mo):
         value="5sig",
         label="Prior width",
     )
-    chains = mo.ui.number(value=4, start=1, step=1, label="Chains")
-    draws = mo.ui.number(value=2000, start=100, step=500, label="Draws per chain")
+    chains = mo.ui.number(value=8, start=1, step=1, label="Chains")
+    draws = mo.ui.number(value=20000, start=100, step=500, label="Draws per chain")
     single_core = mo.ui.checkbox(value=False, label="Single core")
     save_trace = mo.ui.checkbox(value=True, label="Save .nc trace")
     force = mo.ui.checkbox(value=False, label="Force re-run (ignore cache)")
@@ -213,60 +210,46 @@ def _(cfg, mo):
 @app.cell
 def _(
     blinded,
-    build_fit_hash,
     cfg,
     chains,
     co_cut,
     co_shift,
     draws,
-    get_output_dir,
     mo,
     model_key,
     ndbd_cutoff,
     ndbd_shift,
     pd,
     prior_width,
-    resolve_fit_template_uuids,
-    resolve_storage_coords,
+    setup_storage_fit,
 ):
     # Preview parameter hashes and target paths without running sampler
     sel_co_cut = None if co_cut.value == "None" else co_cut.value
     sel_ndbd_cut = None if ndbd_cutoff.value == "None" else ndbd_cutoff.value
 
-    coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key.value)
-    out_dir = get_output_dir(param_dir)
-
-    tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
+    fit_setup = setup_storage_fit(
         cfg=cfg,
         model_key=model_key.value,
         co_cut=sel_co_cut,
         ndbd_cutoff=sel_ndbd_cut,
         co_shift=float(co_shift.value),
         ndbd_shift=float(ndbd_shift.value),
+        blinded=blinded.value,
+        prior_width=prior_width.value,
+        chains=int(chains.value),
+        draws=int(draws.value),
+        dry_run=True,
     )
 
-    smoothing_cfg = {
-        "enabled": bool(getattr(hm, "smooth", None)),
-        "method": "smooth_nph2",
-        "smooth": list(hm.smooth) if getattr(hm, "smooth", None) else None,
-    }
-    prior_cfg = {"prior_width": prior_width.value}
-    mcmc_cfg = {"chains": int(chains.value), "draws": int(draws.value)}
-    data_source_name = "data_blinded" if blinded.value else "data"
-
-    fit_params, output_uuid = build_fit_hash(
-        model_name="m2",
-        data_source=data_source_name,
-        template_uuids=tpl_uuids,
-        smoothing=smoothing_cfg,
-        priors=prior_cfg,
-        roi_settings=None,
-        mcmc=mcmc_cfg,
-    )
-
-    fit_prefix = out_dir / f"fit_{output_uuid}"
-    h5_exists = fit_prefix.with_suffix(".h5").exists()
-    nc_exists = fit_prefix.with_suffix(".nc").exists()
+    output_uuid = fit_setup["output_uuid"]
+    fit_prefix = fit_setup["fit_prefix"]
+    h5_exists = fit_setup["is_cached"]
+    nc_exists = fit_setup["nc_path"].exists()
+    param_dir = fit_setup["param_dir"]
+    uuid_base = fit_setup["uuid_base"]
+    uuid_co = fit_setup["uuid_co"]
+    uuid_ndbd = fit_setup["uuid_ndbd"]
+    fit_params = fit_setup["fit_params"]
 
     run_btn = mo.ui.run_button(label="Execute / Load Fit")
 
@@ -277,8 +260,14 @@ def _(
             {"Property": "Co-60 UUID", "Value": uuid_co},
             {"Property": "0νββ UUID", "Value": uuid_ndbd},
             {"Property": "Output UUID", "Value": output_uuid},
-            {"Property": "Fit HDF5 Target", "Value": f"{fit_prefix.name}.h5 ({'EXISTS' if h5_exists else 'MISSING'})"},
-            {"Property": "Trace NetCDF Target", "Value": f"{fit_prefix.name}.nc ({'EXISTS' if nc_exists else 'MISSING'})"},
+            {
+                "Property": "Fit HDF5 Target",
+                "Value": f"{fit_prefix.name}.h5 ({'EXISTS' if h5_exists else 'MISSING'})",
+            },
+            {
+                "Property": "Trace NetCDF Target",
+                "Value": f"{fit_prefix.name}.nc ({'EXISTS' if nc_exists else 'MISSING'})",
+            },
         ]
     )
 
@@ -352,7 +341,12 @@ def _(
                 force=force.value,
                 verbose=False,
             )
-            table, trace, data, metadata = res.get("table"), res.get("trace"), res.get("data"), res.get("metadata")
+            table, trace, data, metadata = (
+                res.get("table"),
+                res.get("trace"),
+                res.get("data"),
+                res.get("metadata"),
+            )
 
     return data, metadata, table, trace
 
@@ -361,77 +355,90 @@ def _(
 def _(mo, np, pd, table, trace):
     if table is None:
         mo.output.replace(mo.md(""))
+        res_df = None
     else:
-        records = []
-        for var in table.index:
-            rec = {"Component": var}
+        _records = []
+        for _var in table.index:
+            _rec = {"Component": _var}
             if "integral" in table.columns:
-                rec["Prior Integral"] = f"{float(table.loc[var, 'integral']):.1f}"
-            if trace is not None and hasattr(trace, "posterior") and var in trace.posterior:
-                vals = trace.posterior[var].values
-                rec["Posterior Mean"] = f"{float(vals.mean()):.2f}"
-                rec["Posterior Std"] = f"{float(vals.std()):.2f}"
-                rec["90% Interval"] = f"[{float(np.percentile(vals, 5)):.1f}, {float(np.percentile(vals, 95)):.1f}]"
-            records.append(rec)
+                _rec["Prior Integral"] = f"{float(table.loc[_var, 'integral']):.1f}"
+            if trace is not None and hasattr(trace, "posterior") and _var in trace.posterior:
+                _vals = trace.posterior[_var].values
+                _rec["Posterior Mean"] = f"{float(_vals.mean()):.2f}"
+                _rec["Posterior Std"] = f"{float(_vals.std()):.2f}"
+                _rec["90% Interval"] = (
+                    f"[{float(np.percentile(_vals, 5)):.1f}, {float(np.percentile(_vals, 95)):.1f}]"
+                )
+            _records.append(_rec)
 
-        res_df = pd.DataFrame(records)
-        mo.vstack(
-            [
-                mo.md("### Fitted Component Summary"),
-                mo.ui.table(res_df),
-            ]
+        res_df = pd.DataFrame(_records)
+        mo.output.replace(
+            mo.vstack(
+                [
+                    mo.md("### Fitted Component Summary"),
+                    mo.ui.table(res_df),
+                ]
+            )
         )
-    return (records, res_df)
+    return (res_df,)
 
 
 @app.cell
-def _(mo, plt, table, trace):
+def _(mo, table, trace):
     if trace is None or not hasattr(trace, "posterior"):
         mo.output.replace(mo.md("*Trace (.nc) not available for detailed posterior plots.*"))
         plot_var = None
     else:
-        var_options = [v for v in table.index if v in trace.posterior]
-        plot_var = mo.ui.dropdown(options=var_options, value=var_options[0] if var_options else None, label="Plot variable")
-        mo.hstack([mo.md("**Posterior Diagnostics:**"), plot_var])
+        _var_options = [v for v in table.index if v in trace.posterior]
+        plot_var = mo.ui.dropdown(
+            options=_var_options,
+            value=_var_options[0] if _var_options else None,
+            label="Plot variable",
+        )
+        mo.output.replace(mo.hstack([mo.md("**Posterior Diagnostics:**"), plot_var]))
     return (plot_var,)
 
 
 @app.cell
 def _(np, plot_var, plt, trace):
     if plot_var is None or plot_var.value is None or trace is None:
-        fig = None
+        diag_fig = None
     else:
-        vname = plot_var.value
-        vals = trace.posterior[vname].values.flatten()
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+        _vname = plot_var.value
+        _vals = trace.posterior[_vname].values.flatten()
+        diag_fig, _axes = plt.subplots(1, 2, figsize=(11, 4))
 
         # Posterior distribution
-        axes[0].hist(vals, bins=40, color="steelblue", edgecolor="black", alpha=0.7, density=True)
-        q05, q50, q95 = np.percentile(vals, [5, 50, 95])
-        axes[0].axvline(q50, color="darkred", linestyle="--", label=f"Median: {q50:.1f}")
-        axes[0].axvline(q05, color="gray", linestyle=":", label=f"90% CI: [{q05:.1f}, {q95:.1f}]")
-        axes[0].axvline(q95, color="gray", linestyle=":")
-        axes[0].set_xlabel(f"{vname} events")
-        axes[0].set_ylabel("Posterior Density")
-        axes[0].set_title(f"Posterior Distribution: {vname}")
-        axes[0].legend(frameon=True)
+        _axes[0].hist(_vals, bins=40, color="steelblue", edgecolor="black", alpha=0.7, density=True)
+        _q05, _q50, _q95 = np.percentile(_vals, [5, 50, 95])
+        _axes[0].axvline(_q50, color="darkred", linestyle="--", label=f"Median: {_q50:.1f}")
+        _axes[0].axvline(
+            _q05, color="gray", linestyle=":", label=f"90% CI: [{_q05:.1f}, {_q95:.1f}]"
+        )
+        _axes[0].axvline(_q95, color="gray", linestyle=":")
+        _axes[0].set_xlabel(f"{_vname} events")
+        _axes[0].set_ylabel("Posterior Density")
+        _axes[0].set_title(f"Posterior Distribution: {_vname}")
+        _axes[0].legend(frameon=True)
 
         # MCMC chain trace
-        for c in range(trace.posterior.sizes.get("chain", 1)):
-            chain_vals = trace.posterior[vname].sel(chain=c).values
-            axes[1].plot(chain_vals, alpha=0.6, label=f"Chain {c}")
-        axes[1].set_xlabel("Draw")
-        axes[1].set_ylabel("Sample Value")
-        axes[1].set_title(f"Trace Plot: {vname}")
+        for _c in range(trace.posterior.sizes.get("chain", 1)):
+            _chain_vals = trace.posterior[_vname].sel(chain=_c).values
+            _axes[1].plot(_chain_vals, alpha=0.6, label=f"Chain {_c}")
+        _axes[1].set_xlabel("Draw")
+        _axes[1].set_ylabel("Sample Value")
+        _axes[1].set_title(f"Trace Plot: {_vname}")
 
         plt.tight_layout()
-    fig
-    return (fig,)
+    diag_fig
+    return (diag_fig,)
 
 
 @app.cell
 def _(assemble_study, mo, pd, plt):
-    study_input = mo.ui.text(value="studies/example_co_shift", label="Study directory", full_width=True)
+    study_input = mo.ui.text(
+        value="studies/example_co_shift", label="Study directory", full_width=True
+    )
     check_study_btn = mo.ui.run_button(label="Inspect Study")
 
     mo.vstack(
@@ -449,39 +456,58 @@ def _(Path, assemble_study, check_study_btn, mo, pd, plt, study_input):
     if not check_study_btn.value:
         mo.output.replace(mo.md("*Click 'Inspect Study' to assemble and view study points.*"))
     else:
-        sdir = Path(study_input.value)
-        if not sdir.exists():
-            mo.output.replace(mo.md(f"⚠️ Study directory `{sdir}` does not exist."))
+        _sdir = Path(study_input.value)
+        if not _sdir.exists():
+            mo.output.replace(mo.md(f"⚠️ Study directory `{_sdir}` does not exist."))
         else:
-            study = assemble_study(sdir)
+            study = assemble_study(_sdir)
             fits_df = study.check_fits()
 
-            res_csv = sdir / "results.csv"
+            _res_csv = _sdir / "results.csv"
             res_plot = None
-            if res_csv.exists():
-                rdf = pd.read_csv(res_csv)
-                if "co_shift" in rdf.columns and "ndbd_mean" in rdf.columns:
-                    fig, ax = plt.subplots(figsize=(6, 3.5))
-                    ax.errorbar(
-                        rdf["co_shift"],
-                        rdf["ndbd_mean"],
-                        yerr=rdf["ndbd_std"] if "ndbd_std" in rdf.columns else None,
+            if _res_csv.exists():
+                _rdf = pd.read_csv(_res_csv)
+                if "co_shift" in _rdf.columns and "ndbd_mean" in _rdf.columns:
+                    study_fig, _ax = plt.subplots(figsize=(6, 3.5))
+                    _ax.errorbar(
+                        _rdf["co_shift"],
+                        _rdf["ndbd_mean"],
+                        yerr=_rdf["ndbd_std"] if "ndbd_std" in _rdf.columns else None,
                         fmt="o-",
                         capsize=3,
                         color="navy",
                     )
-                    ax.set_xlabel("Co-60 Shift [keV]")
-                    ax.set_ylabel("Fitted 0νββ Events")
-                    ax.set_title(f"{study.name}: 0νββ Yield vs Co-60 Shift")
+                    _ax.set_xlabel("Co-60 Shift [keV]")
+                    _ax.set_ylabel("Fitted 0νββ Events")
+                    _ax.set_title(f"{study.name}: 0νββ Yield vs Co-60 Shift")
                     plt.tight_layout()
-                    res_plot = fig
+                    res_plot = study_fig
 
-            mo.vstack(
-                [
-                    mo.md(f"**Assembled Study:** `{study.name}` ({len(study)} evaluation points)"),
-                    mo.ui.table(fits_df[["task_id", "point_id", "co_shift", "output_uuid", "is_fitted", "status"]]),
-                    res_plot if res_plot is not None else mo.md("*No results.csv found. Run study to generate aggregated plot.*"),
-                ]
+            mo.output.replace(
+                mo.vstack(
+                    [
+                        mo.md(
+                            f"**Assembled Study:** `{study.name}` ({len(study)} evaluation points)"
+                        ),
+                        mo.ui.table(
+                            fits_df[
+                                [
+                                    "task_id",
+                                    "point_id",
+                                    "co_shift",
+                                    "output_uuid",
+                                    "is_fitted",
+                                    "status",
+                                ]
+                            ]
+                        ),
+                        res_plot
+                        if res_plot is not None
+                        else mo.md(
+                            "*No results.csv found. Run study to generate aggregated plot.*"
+                        ),
+                    ]
+                )
             )
     return
 

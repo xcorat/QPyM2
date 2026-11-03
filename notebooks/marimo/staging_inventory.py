@@ -164,7 +164,9 @@ def _(Path, build_staging_config, cfg, data_root, mo, pd):
     mo.vstack(
         [
             mo.md("## 1. Resolved staging configuration"),
-            mo.md("_Staging is model-independent: no ROI, threshold, or energy shifts are applied here._"),
+            mo.md(
+                "_Staging is model-independent: no ROI, threshold, or energy shifts are applied here._"
+            ),
             mo.ui.table(staging_summary, selection=None),
         ]
     )
@@ -245,7 +247,9 @@ def _(mo, staging_dir):
 @app.cell
 def _(Path, ROOT, mo, pd, scan_entries, staging_dir_input):
     scan_dir = Path(staging_dir_input.value).expanduser()
-    staging_files = sorted(p for p in scan_dir.glob("*.root") if p.is_file()) if scan_dir.is_dir() else []
+    staging_files = (
+        sorted(p for p in scan_dir.glob("*.root") if p.is_file()) if scan_dir.is_dir() else []
+    )
 
     def _classify(fname: str) -> str:
         if fname in ("data.root", "Reduced_1ton.root"):
@@ -316,7 +320,10 @@ def _(Path, ROOT, mo, pd, scan_entries, staging_dir_input):
         content = mo.vstack(
             [
                 mo.md("## 3. Staging inventory"),
-                mo.callout(mo.md(f"Directory exists but contains no ROOT files: `{scan_dir}`."), kind="warn"),
+                mo.callout(
+                    mo.md(f"Directory exists but contains no ROOT files: `{scan_dir}`."),
+                    kind="warn",
+                ),
             ]
         )
     else:

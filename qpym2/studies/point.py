@@ -30,6 +30,7 @@ class StudyPoint:
         blinded: Whether data is blinded.
         params: Optional dictionary of arbitrary extra parameters.
     """
+
     point_id: str
     task_id: int = 0
     model_key: str = "tech_note_200"
@@ -201,13 +202,16 @@ class StudyPoint:
         }
         data_source_name = "data_blinded" if self.blinded else "data"
 
+        skip_roi = self.params.get("skip_roi")
+        roi_cfg = {"skip_roi": list(skip_roi) if skip_roi else None}
+
         fit_params, output_uuid = build_fit_hash(
             model_name="m2",
             data_source=data_source_name,
             template_uuids=tpl_uuids,
             smoothing=smoothing_cfg,
             priors=prior_cfg,
-            roi_settings=None,
+            roi_settings=roi_cfg,
             mcmc=mcmc_cfg,
             study_context=study_context,
         )
