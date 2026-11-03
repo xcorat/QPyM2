@@ -302,3 +302,206 @@ class StudyPoint:
             dry_run=False,
             verbose=verbose,
         )
+
+    def check_bias_toys(
+        self,
+        study_dir: Union[str, Path],
+        n_toys: int = 200,
+    ) -> Dict[str, Any]:
+        """
+        Check completion status of bias toy fits for this study point.
+        """
+        sdir = Path(study_dir)
+        task_csv = sdir / "tasks" / f"toys_bias_{self.point_id}.csv"
+        is_done = False
+        row_count = 0
+        if task_csv.exists() and task_csv.stat().st_size > 0:
+            import pandas as pd
+            try:
+                df = pd.read_csv(task_csv)
+                row_count = len(df)
+                is_done = row_count >= n_toys
+            except Exception:
+                pass
+
+        return {
+            "point_id": self.point_id,
+            "task_id": self.task_id,
+            "model_key": self.model_key,
+            "co_shift": self.co_shift,
+            "ndbd_shift": self.ndbd_shift,
+            "co_cut": self.co_cut,
+            "n_toys_target": n_toys,
+            "n_toys_completed": row_count,
+            "is_completed": is_done,
+            "task_csv": str(task_csv),
+            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
+        }
+
+    def run_bias_toys(
+        self,
+        cfg: DictConfig,
+        study_dir: Union[str, Path],
+        n_toys: int = 200,
+        bias_min: float = 5.0,
+        bias_max: float = 200.0,
+        seed: int = 42,
+        chains: int = 4,
+        draws: int = 2000,
+        tune: int = 500,
+        target_accept: float = 0.9,
+        single_core: bool = True,
+        prior_width: str = "5sig",
+        mkchain_samples: int = 100,
+        fit_fn: Optional[Any] = None,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Path:
+        """
+        Execute a batch of bias toy fits for this study point.
+
+        Loads precomputed templates via setup_storage_fit, generates pseudo-experiments
+        with uniformly distributed injected signal, fits each toy, and saves the task CSV.
+        """
+        import contextlib
+        import numpy as np
+        import pandas as pd
+
+        sdir = Path(study_dir)
+        tasks_dir = sdir / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_csv = tasks_dir / f"toys_bias_{self.point_id}.csv"
+
+        if not force:
+            status = self.check_bias_toys(study_dir, n_toys=n_toys)
+            if status["is_completed"]:
+                if verbose:
+                    print(f"[{self.point_id}] Bias toys already completed ({status['n_toys_completed']} rows). Skipping.")
+                return task_csv
+
+        # Setup fit objects, templates, and edges from storage
+        from qpym2.storage.fits import setup_storage_fit
+        fit_setup = setup_storage_fit(
+            cfg=cfg,
+            model_key=self.model_key,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+            prior_width=prior_width,
+            mkchain_samples=mkchain_samples,
+            chains=chains,
+            draws=draws,
+            tune=tune,
+            target_accept=target_accept,
+            dry_run=False,
+        )
+
+        fit_comps = fit_setup["fit_comps"]
+        xedges, yedges = fit_setup["edges"]
+        component_names = list(fit_comps.index)
+        if "ndbd" not in component_names:
+            raise ValueError(f"Signal component 'ndbd' not found in components: {component_names}")
+        isig = component_names.index("ndbd")
+
+        rng = np.random.default_rng(seed + self.task_id * 10000)
+        injections = rng.uniform(bias_min, bias_max, size=n_toys)
+        base_norms = np.array([
+            float(fit_comps.loc[c, "integral"]) if "integral" in fit_comps.columns else 1.0
+            for c in component_names
+        ])
+
+        # Prevent fork deadlocks in PyMC parallel sampler if inside threaded runtime
+        try:
+            import pymc.sampling.parallel as _parallel
+            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
+        except Exception:
+            pass
+
+        from qpym2.utils.hists import get_sum_hist, sample_hist
+        from qpym2.models import m2
+        from qpym2.fit.results import _get_stats
+        from qpym2.utils.mathy import get_mode
+        import pymc as pm
+
+        rows = []
+        for i, inj in enumerate(injections):
+            norms = base_norms.copy()
+            norms[isig] = float(inj)
+            hsum = get_sum_hist(fit_comps, norms)
+            data_i = sample_hist(hsum, xedges, yedges)
+
+            if fit_fn is not None:
+                trace = fit_fn(data_i, fit_comps, xedges, yedges)
+            else:
+                fik = m2.make_fik(fit_comps, data_i, xedges, yedges)
+                model = m2.m2_model(fit_comps, fik)
+                with model:
+                    trace = pm.sample(
+                        draws=draws,
+                        tune=tune,
+                        chains=chains,
+                        cores=1 if single_core else chains,
+                        return_inferencedata=True,
+                        target_accept=target_accept,
+                        progressbar=False,
+                        idata_kwargs={"log_likelihood": True},
+                        random_seed=int(seed + self.task_id * 10000 + i + 1),
+                    )
+
+            ndbd_post = trace.posterior["ndbd"].values.flatten()
+            stats = _get_stats(ndbd_post)
+            mode_val = float(stats["mode"])
+            upp34_val = float(stats["upp34"])
+            uerr = upp34_val - mode_val
+            pull = (mode_val - float(inj)) / uerr if abs(uerr) > 1e-9 else 0.0
+
+            logp_val = 0.0
+            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
+                ll = trace.log_likelihood
+                if hasattr(ll, "pik"):
+                    arr = np.asarray(ll.pik.values).flatten()
+                elif isinstance(ll, dict) and "pik" in ll:
+                    arr = np.asarray(ll["pik"]).flatten()
+                else:
+                    arr = np.array([])
+                if len(arr) > 1:
+                    logp_val = float(get_mode(arr))
+                elif len(arr) == 1:
+                    logp_val = float(arr[0])
+
+            row = {
+                "toy_id": i,
+                "task_id": self.task_id,
+                "point_id": self.point_id,
+                "model_key": self.model_key,
+                "co_shift": self.co_shift,
+                "ndbd_shift": self.ndbd_shift,
+                "co_cut": str(self.co_cut),
+                "ndbd_cutoff": str(self.ndbd_cutoff),
+                "type_": "bias",
+                "ndbd_inj_": float(inj),
+                "logp_mode_": logp_val,
+                "pull": float(pull),
+            }
+
+            for var in component_names:
+                var_post = trace.posterior[var].values.flatten()
+                v_stats = _get_stats(var_post)
+                for sname, sval in v_stats.items():
+                    row[f"{var}_{sname}"] = float(sval)
+
+            rows.append(row)
+            if verbose and ((i + 1) % 10 == 0 or (i + 1) == n_toys):
+                print(f"[{self.point_id}] Completed {i + 1}/{n_toys} bias toys", flush=True)
+
+        df_res = pd.DataFrame(rows)
+        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
+        df_res.to_csv(temp_csv, index=False)
+        temp_csv.replace(task_csv)
+
+        if verbose:
+            print(f"[{self.point_id}] Saved {len(df_res)} bias toys: {task_csv}")
+
+        return task_csv
+

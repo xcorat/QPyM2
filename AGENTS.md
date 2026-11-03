@@ -44,7 +44,7 @@ scripts/gen_params.py ─► scripts/params/<type>_params.tsv ─► SLURM array
 | Fit input (storage) | `qpym2/run/run_create_storage_inputs.py` | `fit_data/.../input/*.h5` |
 | Fits | `qpym2/run/run_single_fit.py` (atomic), `qpym2/run/run_fits.py` (local pool) | `fit.nc`, `fit.h5` |
 | Fits (storage) | `qpym2/run/run_single_storage_fit.py` | `fit_data/.../output/fit_<UUID>.h5` |
-| Studies | `qpym2/run/run_study.py` | `studies/<name>/{results.csv, .sqlite}` |
+| Studies | `qpym2/run/run_study.py` | `studies/<name>/{results.csv, .sqlite, bias_calibration.json}` |
 | Systematics | `qpym2/run/run_syst_lss.py`, `run_syst_mc.py`, `run_ndbd_shift_syst.py` | `.nc` / CSV |
 | Toys/sens/bias | `qpym2/run/run_toy_batch.py` (SLURM task), `run_toy_fits.py` (library) | per-task CSV |
 | Aggregate | `scripts/collect_results.py` | merged CSV |
@@ -67,6 +67,7 @@ python -m qpym2.run.run_create_input   -e m2v5-1 -a tech_note
 python -m qpym2.run.run_create_storage_inputs -e local -a base -m tech_note_200 --co-shifts 0.0 0.8 1.0 1.2
 python -m qpym2.run.run_single_storage_fit -e local -a base -m tech_note_200 --co-shift 0.8 --save-trace
 python -m qpym2.run.run_study --study-dir studies/example_co_shift --check-inputs
+python -m qpym2.run.run_study --study-dir studies/example_bias_study --check-bias
 python -m qpym2.run.run_single_fit -e m2v5-1 -a tech_note \
     --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000
 python -m qpym2.run.run_fits -p scripts/params/fit_params.tsv --dry-run

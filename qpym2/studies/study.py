@@ -418,3 +418,202 @@ class Study:
         print(f"[INFO] Collected results for {len(results_df)} points to: {target_csv}")
         return results_df
 
+    def check_bias_toys(self, n_toys: Optional[int] = None) -> pd.DataFrame:
+        """
+        Check bias toy completion status across all study points.
+        """
+        target_n = n_toys
+        if target_n is None and hasattr(self.cfg, "bias") and hasattr(self.cfg.bias, "n_toys"):
+            target_n = int(self.cfg.bias.n_toys)
+        if target_n is None:
+            target_n = 200
+
+        records = [p.check_bias_toys(self.study_dir, n_toys=target_n) for p in self.points]
+        return pd.DataFrame(records)
+
+    def print_bias_status(self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None) -> None:
+        """
+        Print human-readable summary of bias toy completion across study points.
+        """
+        status_df = df if df is not None else self.check_bias_toys(n_toys=n_toys)
+        total_points = len(status_df)
+        completed_points = sum(status_df["is_completed"]) if "is_completed" in status_df else 0
+
+        print("\n" + "=" * 70)
+        print(f"Bias Study Toys: {self.name} ({total_points} total points)")
+        print(f"Directory: {self.study_dir}")
+        print("=" * 70)
+
+        display_cols = [
+            "task_id",
+            "point_id",
+            "co_shift",
+            "n_toys_completed",
+            "n_toys_target",
+            "is_completed",
+            "status",
+        ]
+        avail_cols = [c for c in display_cols if c in status_df.columns]
+        print(status_df[avail_cols].to_string(index=False))
+
+        print("-" * 70)
+        if completed_points == total_points:
+            print(f"✓ All {total_points} bias toy tasks are COMPLETED.")
+        else:
+            print(f"⏳ {completed_points}/{total_points} bias toy tasks completed.")
+        print("=" * 70 + "\n")
+
+    def run_bias_toys(
+        self,
+        n_toys: Optional[int] = None,
+        bias_min: Optional[float] = None,
+        bias_max: Optional[float] = None,
+        seed: Optional[int] = None,
+        chains: Optional[int] = None,
+        draws: Optional[int] = None,
+        tune: Optional[int] = None,
+        target_accept: Optional[float] = None,
+        fit_fn: Optional[Any] = None,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Execute bias toy fits across all points in the study.
+
+        Pulls default parameters from cfg.bias if available.
+        """
+        bcfg = getattr(self.cfg, "bias", None)
+
+        def _resolve(val, key, default):
+            if val is not None:
+                return val
+            if bcfg and hasattr(bcfg, key):
+                return getattr(bcfg, key)
+            return default
+
+        _n_toys = int(_resolve(n_toys, "n_toys", 200))
+        _bias_min = float(_resolve(bias_min, "bias_min", 5.0))
+        _bias_max = float(_resolve(bias_max, "bias_max", 200.0))
+        _seed = int(_resolve(seed, "seed", 42))
+        _chains = int(_resolve(chains, "chains", 4))
+        _draws = int(_resolve(draws, "draws", 2000))
+        _tune = int(_resolve(tune, "tune", 500))
+        _target_accept = float(_resolve(target_accept, "target_accept", 0.9))
+
+        results = {}
+        for p in self.points:
+            if not force:
+                st = p.check_bias_toys(self.study_dir, n_toys=_n_toys)
+                if st["is_completed"]:
+                    if verbose:
+                        print(f"[{p.point_id}] Bias toys completed ({st['n_toys_completed']} rows). Skipping.")
+                    results[p.point_id] = {"status": "SKIPPED", "task_csv": st["task_csv"]}
+                    continue
+
+            if verbose:
+                print(f"[{p.point_id}] Running {_n_toys} bias toys (injections in [{_bias_min}, {_bias_max}])...")
+
+            csv_path = p.run_bias_toys(
+                cfg=self.cfg,
+                study_dir=self.study_dir,
+                n_toys=_n_toys,
+                bias_min=_bias_min,
+                bias_max=_bias_max,
+                seed=_seed,
+                chains=_chains,
+                draws=_draws,
+                tune=_tune,
+                target_accept=_target_accept,
+                fit_fn=fit_fn,
+                force=force,
+                verbose=verbose,
+            )
+            results[p.point_id] = {"status": "COMPLETED", "task_csv": str(csv_path)}
+
+        return results
+
+    def collect_bias_results(
+        self,
+        output_csv: Optional[Union[str, Path]] = None,
+        xmin: Optional[float] = None,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Merge bias task CSVs into results.csv and compute calibration parameters via get_bias_from_fitdf.
+
+        Saves bias_calibration.json and synchronizes the study SQLite index.
+        """
+        import json
+        from qpym2.storage.study import collect_study_results, record_study_point
+        from qpym2.io.toys import _unflatten_columns
+        from qpym2.fit.bias import get_bias_from_fitdf
+
+        bcfg = getattr(self.cfg, "bias", None)
+        _xmin = xmin if xmin is not None else (float(getattr(bcfg, "xmin", 15.0)) if bcfg else 15.0)
+
+        sqlite_path = self.study_dir / f"{self.name}.sqlite"
+        merged_df = collect_study_results(self.study_dir, self.name)
+        if merged_df.empty:
+            if verbose:
+                print(f"[WARN] No task CSV results found in {self.study_dir}/tasks.")
+            return {"results_df": merged_df, "calibration": {}}
+
+        calibrations: Dict[str, Any] = {}
+        for p in self.points:
+            point_df = merged_df[merged_df["point_id"] == p.point_id].copy()
+            if point_df.empty or len(point_df) < 5:
+                continue
+
+            unflat = _unflatten_columns(point_df)
+            try:
+                popt, pcov = get_bias_from_fitdf(unflat, xmin=_xmin)
+                a_val = float(popt[0])
+                b_val = float(popt[1])
+                a_err = float(np.sqrt(max(pcov[0, 0], 0.0)))
+                b_err = float(np.sqrt(max(pcov[1, 1], 0.0)))
+
+                calib_entry = {
+                    "point_id": p.point_id,
+                    "task_id": p.task_id,
+                    "co_shift": p.co_shift,
+                    "co_cut": str(p.co_cut),
+                    "a": a_val,
+                    "b": b_val,
+                    "a_err": a_err,
+                    "b_err": b_err,
+                    "pcov_00": float(pcov[0, 0]),
+                    "pcov_01": float(pcov[0, 1]),
+                    "pcov_10": float(pcov[1, 0]),
+                    "pcov_11": float(pcov[1, 1]),
+                    "xmin": float(_xmin),
+                    "n_toys": len(point_df),
+                }
+                calibrations[p.point_id] = calib_entry
+
+                # Sync to SQLite
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "study_name": self.name,
+                        "task_id": p.task_id,
+                        "status": "completed",
+                        "summary_json": calib_entry,
+                    },
+                )
+                if verbose:
+                    print(f"[{p.point_id}] Bias fit: a = {a_val:.4f} +/- {a_err:.4f}, b = {b_val:.4f} +/- {b_err:.4f} (xmin={_xmin})")
+            except Exception as e:
+                if verbose:
+                    print(f"[WARN] Could not fit bias for point {p.point_id}: {e}")
+
+        calib_file = self.study_dir / "bias_calibration.json"
+        with open(calib_file, "w", encoding="utf-8") as f:
+            json.dump(calibrations, f, indent=2)
+
+        if verbose:
+            print(f"[INFO] Saved bias calibration parameters for {len(calibrations)} points: {calib_file}")
+
+        return {"results_df": merged_df, "calibration": calibrations}
+
+

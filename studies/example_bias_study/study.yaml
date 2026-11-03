@@ -1,0 +1,31 @@
+study:
+  name: example_bias_study
+  type: bias
+  description: "Signal injection bias study for tech_note_200 across Co-60 shifts"
+
+defaults:
+  environment: local
+  staging: default
+  analysis: base
+  models: tech_note
+  model_key: tech_note_200
+
+reference:
+  co_cut: gamma10_v150
+  ndbd_cutoff: u1740
+  co_shift: 0.0
+  ndbd_shift: 0.0
+  blinded: false
+
+sweep:
+  co_shift: [0.0, 0.8, 1.0, 1.2]
+
+bias:
+  n_toys: 200
+  bias_min: 5.0
+  bias_max: 200.0
+  xmin: 15.0
+  seed: 42
+  chains: 4
+  draws: 2000
+  tune: 500

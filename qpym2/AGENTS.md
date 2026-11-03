@@ -17,7 +17,7 @@ canonical test/lint commands. This file maps the package.
 | `utils/` | Shared utilities | `logging.py`, `hists.py`, `hist_model.py`, `pool.py`, `mathy.py`, `hw.py`, `TempConfig.py` |
 | `core/` | Lower-level ROOT/hist primitives | `qroot.py`, `hists.py` |
 | `storage/` | Data storage layout, hashing, HDF5 metadata, input generation, fit assembly, and study indexing | `schema.py`, `hasher.py`, `paths.py`, `backend.py`, `inputs.py`, `fits.py`, `study.py` |
-| `studies/` | Study folder config inheritance, assembly, input validation, fit execution, and results aggregation | `config.py`, `point.py`, `assembly.py`, `study.py` |
+| `studies/` | Study folder config inheritance, assembly, input validation, fit execution, bias toy fits, and results aggregation | `config.py`, `point.py`, `assembly.py`, `study.py` |
 | `tests/` | Test suite | see root `AGENTS.md` "Testing" |
 
 ## Conventions
