@@ -68,6 +68,7 @@ python -m qpym2.run.run_create_storage_inputs -e local -a base -m tech_note_200 
 python -m qpym2.run.run_single_storage_fit -e local -a base -m tech_note_200 --co-shift 0.8 --save-trace
 python -m qpym2.run.run_study --study-dir studies/example_co_shift --check-inputs
 python -m qpym2.run.run_study --study-dir studies/example_bias_study --check-bias
+python -m qpym2.run.run_study --study-dir studies/example_sens_study --check-sens
 python -m qpym2.run.run_single_fit -e m2v5-1 -a tech_note \
     --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000
 python -m qpym2.run.run_fits -p scripts/params/fit_params.tsv --dry-run

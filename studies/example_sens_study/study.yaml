@@ -1,0 +1,29 @@
+study:
+  name: example_sens_study
+  type: sens
+  description: "Expected 90% CL sensitivity study for tech_note_200 across Co-60 shifts"
+
+defaults:
+  environment: local
+  staging: default
+  analysis: base
+  models: tech_note
+  model_key: tech_note_200
+
+reference:
+  co_cut: gamma10_v150
+  ndbd_cutoff: u1740
+  co_shift: 0.0
+  ndbd_shift: 0.0
+  blinded: false
+
+sweep:
+  co_shift: [0.0, 0.8, 1.0, 1.2]
+
+sens:
+  n_toys: 20
+  seed: 42
+  chains: 4
+  draws: 2000
+  tune: 500
+  bias_calibration: "studies/example_bias_study/bias_calibration.json"

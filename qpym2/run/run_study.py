@@ -105,11 +105,35 @@ def parse_args():
         default=False,
         help="Merge bias task CSVs and fit calibration curves via get_bias_from_fitdf",
     )
+    # Sensitivity study arguments
+    parser.add_argument(
+        "--check-sens",
+        action="store_true",
+        default=False,
+        help="Check and print sensitivity toy completion status for all study points",
+    )
+    parser.add_argument(
+        "--run-sens",
+        action="store_true",
+        default=False,
+        help="Execute sensitivity toy fits (H0: ndbd=0) across all study points",
+    )
+    parser.add_argument(
+        "--collect-sens",
+        action="store_true",
+        default=False,
+        help="Merge sensitivity task CSVs, compute median sensitivity and quantiles, and save sens_summary.json",
+    )
+    parser.add_argument(
+        "--sens-bias-calib",
+        default=None,
+        help="Optional path to bias_calibration.json to compute bias-corrected sensitivities",
+    )
     parser.add_argument(
         "--n-toys",
         type=int,
         default=None,
-        help="Number of bias toys to run per study point (default: from config or 200)",
+        help="Number of toys to run per study point (default: from config or 200)",
     )
     parser.add_argument(
         "--bias-min",
@@ -187,7 +211,8 @@ def main():
 
     # 3. Print input status report
     is_bias_mode = args.check_bias or args.run_bias or args.collect_bias
-    if args.check_inputs or (not args.check_fits and not args.run_fits and not args.collect_results and not is_bias_mode):
+    is_sens_mode = args.check_sens or args.run_sens or args.collect_sens
+    if args.check_inputs or (not args.check_fits and not args.run_fits and not args.collect_results and not is_bias_mode and not is_sens_mode):
         study.print_input_status()
 
     # 4. Standard fit execution if requested
@@ -238,6 +263,27 @@ def main():
     if args.collect_bias or args.run_bias:
         print("[INFO] Collecting bias results and fitting calibration curves...")
         study.collect_bias_results(xmin=args.xmin, verbose=args.verbose)
+
+    # 10. Sensitivity toy execution if requested
+    if args.run_sens:
+        print(f"[INFO] Running sensitivity toys across study points (force={args.force_fits})...")
+        study.run_sens_toys(
+            n_toys=args.n_toys,
+            seed=args.seed,
+            chains=args.chains if args.chains != 8 else 4,
+            draws=args.draws if args.draws != 20000 else 2000,
+            force=args.force_fits,
+            verbose=args.verbose,
+        )
+
+    # 11. Check sensitivity toy completion status
+    if args.check_sens or args.run_sens:
+        study.print_sens_status(n_toys=args.n_toys)
+
+    # 12. Collect sensitivity results and compute summary metrics
+    if args.collect_sens or args.run_sens:
+        print("[INFO] Collecting sensitivity results and computing summary metrics...")
+        study.collect_sens_results(bias_calibration=args.sens_bias_calib, verbose=args.verbose)
 
 
 

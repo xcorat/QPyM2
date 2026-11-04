@@ -616,4 +616,248 @@ class Study:
 
         return {"results_df": merged_df, "calibration": calibrations}
 
+    def check_sens_toys(self, n_toys: Optional[int] = None) -> pd.DataFrame:
+        """
+        Check sensitivity toy completion status across all study points.
+        """
+        target_n = n_toys
+        if target_n is None and hasattr(self.cfg, "sens") and hasattr(self.cfg.sens, "n_toys"):
+            target_n = int(self.cfg.sens.n_toys)
+        if target_n is None:
+            target_n = 200
+
+        records = [p.check_sens_toys(self.study_dir, n_toys=target_n) for p in self.points]
+        return pd.DataFrame(records)
+
+    def print_sens_status(self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None) -> None:
+        """
+        Print human-readable summary of sensitivity toy completion across study points.
+        """
+        status_df = df if df is not None else self.check_sens_toys(n_toys=n_toys)
+        total_points = len(status_df)
+        completed_points = sum(status_df["is_completed"]) if "is_completed" in status_df else 0
+
+        print("\n" + "=" * 70)
+        print(f"Sensitivity Study Toys: {self.name} ({total_points} total points)")
+        print(f"Directory: {self.study_dir}")
+        print("=" * 70)
+
+        display_cols = [
+            "task_id",
+            "point_id",
+            "co_shift",
+            "n_toys_completed",
+            "n_toys_target",
+            "is_completed",
+            "status",
+        ]
+        avail_cols = [c for c in display_cols if c in status_df.columns]
+        print(status_df[avail_cols].to_string(index=False))
+
+        print("-" * 70)
+        if completed_points == total_points:
+            print(f"✓ All {total_points} sensitivity toy tasks are COMPLETED.")
+        else:
+            print(f"⏳ {completed_points}/{total_points} sensitivity toy tasks completed.")
+        print("=" * 70 + "\n")
+
+    def run_sens_toys(
+        self,
+        n_toys: Optional[int] = None,
+        seed: Optional[int] = None,
+        chains: Optional[int] = None,
+        draws: Optional[int] = None,
+        tune: Optional[int] = None,
+        target_accept: Optional[float] = None,
+        fit_fn: Optional[Any] = None,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Execute sensitivity toy fits across all points in the study.
+
+        Pulls default parameters from cfg.sens if available.
+        """
+        scfg = getattr(self.cfg, "sens", None)
+
+        def _resolve(val, key, default):
+            if val is not None:
+                return val
+            if scfg and hasattr(scfg, key):
+                return getattr(scfg, key)
+            return default
+
+        _n_toys = int(_resolve(n_toys, "n_toys", 200))
+        _seed = int(_resolve(seed, "seed", 42))
+        _chains = int(_resolve(chains, "chains", 4))
+        _draws = int(_resolve(draws, "draws", 2000))
+        _tune = int(_resolve(tune, "tune", 500))
+        _target_accept = float(_resolve(target_accept, "target_accept", 0.9))
+
+        results = {}
+        for p in self.points:
+            if not force:
+                st = p.check_sens_toys(self.study_dir, n_toys=_n_toys)
+                if st["is_completed"]:
+                    if verbose:
+                        print(f"[{p.point_id}] Sensitivity toys completed ({st['n_toys_completed']} rows). Skipping.")
+                    results[p.point_id] = {"status": "SKIPPED", "task_csv": st["task_csv"]}
+                    continue
+
+            if verbose:
+                print(f"[{p.point_id}] Running {_n_toys} sensitivity toys (H0: ndbd=0)...")
+
+            csv_path = p.run_sens_toys(
+                cfg=self.cfg,
+                study_dir=self.study_dir,
+                n_toys=_n_toys,
+                seed=_seed,
+                chains=_chains,
+                draws=_draws,
+                tune=_tune,
+                target_accept=_target_accept,
+                fit_fn=fit_fn,
+                force=force,
+                verbose=verbose,
+            )
+            results[p.point_id] = {"status": "COMPLETED", "task_csv": str(csv_path)}
+
+        return results
+
+    def collect_sens_results(
+        self,
+        output_csv: Optional[Union[str, Path]] = None,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Merge sensitivity task CSVs into results.csv and compute summary quantiles per point.
+
+        Calculates expected sensitivity (median ndbd_p90), 1-sigma [p16, p84],
+        and 2-sigma [p025, p975] containment intervals. Optionally applies
+        bias correction from bias_calibration, saves sens_summary.json, and
+        synchronizes the study SQLite index.
+        """
+        import json
+        from qpym2.storage.study import collect_study_results, record_study_point
+
+        sqlite_path = self.study_dir / f"{self.name}.sqlite"
+        merged_df = collect_study_results(self.study_dir, self.name)
+        if merged_df.empty:
+            if verbose:
+                print(f"[WARN] No sensitivity task CSV results found in {self.study_dir}/tasks.")
+            return {"results_df": merged_df, "summary": {}}
+
+        # Resolve bias calibration if available
+        calib_dict: Dict[str, Any] = {}
+        if isinstance(bias_calibration, dict):
+            calib_dict = bias_calibration
+        elif bias_calibration is not None:
+            cpath = Path(bias_calibration)
+            if not cpath.is_absolute():
+                cpath = self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+        else:
+            scfg = getattr(self.cfg, "sens", None)
+            cfg_calib = getattr(scfg, "bias_calibration", None) if scfg else None
+            if cfg_calib:
+                cpath = Path(str(cfg_calib))
+                if not cpath.is_absolute():
+                    cpath = self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+                if cpath.exists():
+                    with open(cpath, "r", encoding="utf-8") as f:
+                        calib_dict = json.load(f)
+            elif (self.study_dir / "bias_calibration.json").exists():
+                with open(self.study_dir / "bias_calibration.json", "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+
+        summaries: Dict[str, Any] = {}
+        for p in self.points:
+            point_df = merged_df[merged_df["point_id"] == p.point_id].copy()
+            if point_df.empty:
+                continue
+
+            p90_vals = point_df["ndbd_p90"].dropna().values if "ndbd_p90" in point_df.columns else np.array([])
+            mode_vals = point_df["ndbd_mode"].dropna().values if "ndbd_mode" in point_df.columns else np.array([])
+
+            if len(p90_vals) == 0:
+                continue
+
+            summary_entry: Dict[str, Any] = {
+                "point_id": p.point_id,
+                "task_id": p.task_id,
+                "co_shift": p.co_shift,
+                "ndbd_shift": p.ndbd_shift,
+                "co_cut": str(p.co_cut),
+                "ndbd_cutoff": str(p.ndbd_cutoff),
+                "n_toys": len(point_df),
+                "sens_p90_median": float(np.median(p90_vals)),
+                "sens_p90_p16": float(np.percentile(p90_vals, 16)),
+                "sens_p90_p84": float(np.percentile(p90_vals, 84)),
+                "sens_p90_p025": float(np.percentile(p90_vals, 2.5)),
+                "sens_p90_p975": float(np.percentile(p90_vals, 97.5)),
+                "sens_mode_median": float(np.median(mode_vals)) if len(mode_vals) > 0 else 0.0,
+                "sens_mode_p16": float(np.percentile(mode_vals, 16)) if len(mode_vals) > 0 else 0.0,
+                "sens_mode_p84": float(np.percentile(mode_vals, 84)) if len(mode_vals) > 0 else 0.0,
+            }
+
+            # Check if matching bias calibration entry exists
+            p_calib = calib_dict.get(p.point_id)
+            if not p_calib:
+                # Try finding by matching co_shift
+                for ck, cv in calib_dict.items():
+                    if isinstance(cv, dict) and cv.get("co_shift") == p.co_shift:
+                        p_calib = cv
+                        break
+
+            if p_calib and "a" in p_calib and "b" in p_calib:
+                a_val = float(p_calib["a"])
+                b_val = float(p_calib["b"])
+                # Bias-corrected upper limits: (N - b)/a, clipped at 0
+                p90_bc = np.clip((p90_vals - b_val) / a_val, 0.0, None)
+                summary_entry["bc_a"] = a_val
+                summary_entry["bc_b"] = b_val
+                summary_entry["sens_bc_p90_median"] = float(np.median(p90_bc))
+                summary_entry["sens_bc_p90_p16"] = float(np.percentile(p90_bc, 16))
+                summary_entry["sens_bc_p90_p84"] = float(np.percentile(p90_bc, 84))
+                summary_entry["sens_bc_p90_p025"] = float(np.percentile(p90_bc, 2.5))
+                summary_entry["sens_bc_p90_p975"] = float(np.percentile(p90_bc, 97.5))
+
+            summaries[p.point_id] = summary_entry
+
+            # Sync to SQLite
+            record_study_point(
+                sqlite_path,
+                {
+                    "point_id": p.point_id,
+                    "study_name": self.name,
+                    "task_id": p.task_id,
+                    "status": "completed",
+                    "summary_json": summary_entry,
+                },
+            )
+            if verbose:
+                bc_str = (
+                    f" (bias-corrected median: {summary_entry['sens_bc_p90_median']:.2f})"
+                    if "sens_bc_p90_median" in summary_entry
+                    else ""
+                )
+                print(
+                    f"[{p.point_id}] Expected 90% CL sensitivity: "
+                    f"median = {summary_entry['sens_p90_median']:.2f} "
+                    f"[-1σ: {summary_entry['sens_p90_p16']:.2f}, +1σ: {summary_entry['sens_p90_p84']:.2f}]{bc_str}"
+                )
+
+        summary_file = self.study_dir / "sens_summary.json"
+        with open(summary_file, "w", encoding="utf-8") as f:
+            json.dump(summaries, f, indent=2)
+
+        if verbose:
+            print(f"[INFO] Saved sensitivity summary metrics for {len(summaries)} points: {summary_file}")
+
+        return {"results_df": merged_df, "summary": summaries}
+
+
 
