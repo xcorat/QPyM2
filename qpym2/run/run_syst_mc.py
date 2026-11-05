@@ -166,9 +166,9 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description='Parallel MC (BM-stat) systematic fits (Pool-dispatched).',
     )
-    parser.add_argument('--environment', '-e', default='tech_note')
+    parser.add_argument('--environment', '-e', default=None)
     parser.add_argument('--analysis', '-a', default=None)
-    parser.add_argument('--hyperparams', default=None)
+    parser.add_argument('--model-key', '-m', default='default')
     parser.add_argument('--co-cut', default='gamma10_v150')
     parser.add_argument('--ndbd-cutoff', default='u1740')
     parser.add_argument('--co-shift', type=float, default=1.0)
@@ -222,18 +222,16 @@ def main():
     from qpym2.fit.create_m2uv import create_evlist, get_mctable
     from qpym2.fit.bias import read_bias_csv, apply_bias_correction
 
-    analysis = args.analysis or args.environment
     cfg = get_config(
         environment=args.environment,
-        analysis=analysis,
-        hyperparams=args.hyperparams,
+        analysis=args.analysis,
     )
 
     jags_fpath = get_jags_path(cfg)
     corrmat_fpath = None if args.stat_only else get_corrmat_path(cfg)
-    h2uv_model = get_h2uv_model(cfg)
-    comp_cfg_base = get_comp_cfg(cfg)
-    input_cfg = build_input_config(cfg)
+    h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
+    comp_cfg_base = get_comp_cfg(cfg, model_key=args.model_key)
+    input_cfg = build_input_config(cfg, model_key=args.model_key)
     syst_dir = get_systematic_dir(cfg)
 
     mcfg = model_cfg(

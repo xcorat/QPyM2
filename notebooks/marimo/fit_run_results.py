@@ -17,14 +17,14 @@ def _():
     import numpy as np
     import pandas as pd
 
-    from qpym2.cfg.config_builders_new import (
+    from qpym2.cfg.config_builders import (
         get_comp_cfg,
         get_fit_data_dir,
         get_h2uv_model,
         get_jags_path,
         get_model_storage_coords,
     )
-    from qpym2.cfg.hydra_adapter_new import (
+    from qpym2.cfg.hydra_adapter import (
         HydraConfigManager,
         get_config,
         resolve_config_dir,

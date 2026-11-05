@@ -23,7 +23,7 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager
+from qpym2.cfg.hydra_adapter import HydraConfigManager
 from qpym2.fit import fit as fit_module
 from qpym2.storage.backend import read_fit, write_fit
 from qpym2.storage.fits import setup_storage_fit
@@ -44,8 +44,8 @@ def parse_args():
         help="Analysis profile name (e.g. base)",
     )
     parser.add_argument(
-        "-m", "--model", default="tech_note_200",
-        help="Model key from models tier (e.g. tech_note_200)",
+        "-m", "--model", default="default",
+        help="Model key from models tier (e.g. default, tech_note_200)",
     )
     parser.add_argument(
         "--config-dir", default=None,

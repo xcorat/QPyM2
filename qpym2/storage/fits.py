@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
 
-from qpym2.cfg.config_builders_new import (
+from qpym2.cfg.config_builders import (
     get_comp_cfg,
     get_corrmat_path,
     get_jags_path,
@@ -99,7 +99,7 @@ def resolve_fit_template_uuids(
         uuid_ndbd = uuid_base
 
     # Map analysis components to their parameter-set UUID
-    comp_cfg = get_comp_cfg(cfg)
+    comp_cfg = get_comp_cfg(cfg, model_key=model_key)
     component_uuid_map: Dict[str, str] = {}
     for c in comp_cfg:
         cname = c['name']
@@ -292,7 +292,7 @@ def setup_storage_fit(
     coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key)
     out_dir = get_output_dir(param_dir)
     jags_fpath = get_jags_path(cfg)
-    comp_cfg = [dict(c) for c in get_comp_cfg(cfg)]
+    comp_cfg = [dict(c) for c in get_comp_cfg(cfg, model_key=model_key)]
 
     # 1. Resolve parameter-set UUIDs
     tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(

@@ -1,6 +1,6 @@
 # @package _global_
 # Tech Note 1-ton Model Configurations
-# Models can specify ROI boundaries, thresholds, binning, and custom MC component groupings
+default_model: "tech_note_200"
 
 models:
   tech_note_200:

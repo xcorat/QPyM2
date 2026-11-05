@@ -16,7 +16,7 @@ from qpym2.storage.inputs import (
 from qpym2.storage.hasher import compute_input_uuid
 from qpym2.storage.backend import read_template, read_observed_data
 from qpym2.utils.hists import HistType
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager
+from qpym2.cfg.hydra_adapter import HydraConfigManager
 
 
 def test_build_shift_defs():

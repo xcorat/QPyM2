@@ -1,7 +1,7 @@
 # Configuration System Update Plan
 
-**Status:** Phase 1 & 2 Completed (v0.6 4-tier layout and documentation implemented)  
-**Scope:** Foundation schema, programmatic adapters (`*_new.py`), tests, and documentation.
+**Status:** Phase 1, 2, & 3 Completed (v0.6 4-tier layout, documentation, and canonical adapter promotion implemented)  
+**Scope:** Foundation schema, programmatic adapters (promoted to canonical `hydra_adapter.py` and `config_builders.py`), strict model key resolution, tests, and documentation.
 
 ## Goal
 

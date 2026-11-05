@@ -58,10 +58,11 @@ def _run_fit_job(job):
     """
     task_id = job['task_id']
     try:
+        model_key = job.get('model_key', 'default')
         cfg = get_config(environment=job['environment'])
         fit_dir = get_fit_dir(cfg)
-        h2uv_model = get_h2uv_model(cfg)
-        comp_cfg = get_comp_cfg(cfg)
+        h2uv_model = get_h2uv_model(cfg, model_key=model_key)
+        comp_cfg = get_comp_cfg(cfg, model_key=model_key)
         data_name, data_blinded_name = get_data_names(cfg)
         jags_fpath = get_jags_path(cfg)
         naming = cfg.infrastructure.naming_conventions

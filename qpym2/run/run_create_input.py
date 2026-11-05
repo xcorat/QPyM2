@@ -49,14 +49,20 @@ Examples:
     
     parser.add_argument(
         '--environment', '-e',
-        default='tech_note',
-        help='Environment name (default: tech_note)'
+        default=None,
+        help='Environment name (default from config: local)'
     )
     
     parser.add_argument(
         '--analysis', '-a',
         default=None,
-        help='Analysis profile name (default: same as environment)'
+        help='Analysis profile name (default from config: base)'
+    )
+
+    parser.add_argument(
+        '--model-key', '-m',
+        default='default',
+        help='Model key in config/models/ (default: default)'
     )
     
     parser.add_argument(
@@ -102,19 +108,18 @@ def main():
     args = parse_args()
     
     # Load Hydra configuration
-    analysis = args.analysis if args.analysis else args.environment
     cfg = get_config(
         environment=args.environment,
-        analysis=analysis
+        analysis=args.analysis
     )
     
     # Build configuration dicts using builders
     jags_fpath = get_jags_path(cfg)
-    input_cfg = build_input_config(cfg)
+    input_cfg = build_input_config(cfg, model_key=args.model_key)
     write_cfg = build_write_config(cfg)
     
     # Get h2uv_model from config
-    h2uv_model = get_h2uv_model(cfg)
+    h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
     
     # Extract cut dictionaries from config for model_cfg
     co_cuts_dict = dict(cfg.cuts.co_cuts)

@@ -15,13 +15,11 @@ Usage:
 """
 
 import argparse
-import sys
 import time
-from typing import List, Optional
+from typing import List
 
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager
+from qpym2.cfg.hydra_adapter import HydraConfigManager
 from qpym2.storage.inputs import create_storage_inputs_for_point
-from qpym2.utils.logging import log, debug
 
 
 def parse_args():
@@ -54,8 +52,8 @@ Examples:
     )
     parser.add_argument(
         '--model-key', '-m',
-        default='tech_note_200',
-        help='Model key in config/models/ (default: tech_note_200)',
+        default='default',
+        help='Model key in config/models/ (default: default)',
     )
     parser.add_argument(
         '--co-cut',

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 
 
 def _get_config_dir() -> Path:

@@ -295,12 +295,12 @@ def parse_args():
         """
     )
 
-    parser.add_argument('--environment', '-e', default='tech_note',
-                        help='Environment name (default: tech_note)')
+    parser.add_argument('--environment', '-e', default=None,
+                        help='Environment name (default from config: local)')
     parser.add_argument('--analysis', '-a', default=None,
-                        help='Analysis profile name (default: same as environment)')
-    parser.add_argument('--hyperparams', default=None,
-                        help='Hyperparameter config name')
+                        help='Analysis profile name (default from config: base)')
+    parser.add_argument('--model-key', '-m', default='default',
+                        help='Model key in config/models/ (default: default)')
     parser.add_argument('--type', '-t', default='all',
                         choices=['toys', 'sens', 'bias', 'all'],
                         help='Type of toy fit to run (default: all)')
@@ -321,16 +321,14 @@ def main():
     args = parse_args()
 
     # Load Hydra configuration
-    analysis = args.analysis if args.analysis else args.environment
     cfg = get_config(
         environment=args.environment,
-        analysis=analysis,
-        hyperparams=args.hyperparams,
+        analysis=args.analysis,
     )
 
     # Derive paths and model from config
     fit_dir = get_fit_dir(cfg)
-    h2uv_model = get_h2uv_model(cfg)
+    h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
 
     from qpym2.utils.logging import DEBUG
     DEBUG = 0

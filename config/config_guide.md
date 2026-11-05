@@ -6,7 +6,7 @@ This guide documents the modern configuration architecture in QPyM2. It reflects
 
 ## 1. Architecture
 
-QPyM2 uses **Hydra + OmegaConf**, loaded **programmatically** via `qpym2.cfg.hydra_adapter_new.HydraConfigManager` (or `qpym2.cfg.hydra_adapter`). The entry point is `config/config.yaml`, which composes four orthogonal tiers:
+QPyM2 uses **Hydra + OmegaConf**, loaded **programmatically** via `qpym2.cfg.hydra_adapter.HydraConfigManager`. The entry point is `config/config.yaml`, which composes four orthogonal tiers:
 
 ```yaml
 # config/config.yaml
@@ -68,7 +68,7 @@ Defines concrete fit configurations keyed by name:
 
 ## 3. Path Resolution Engine
 
-Paths are resolved using deterministic rules through `qpym2.cfg.hydra_adapter_new.resolve_data_path`:
+Paths are resolved using deterministic rules through `qpym2.cfg.hydra_adapter.resolve_data_path`:
 1. **Explicit absolute paths**: Any path starting with `/` is treated as an absolute path and returned as-is.
 2. **Relative paths**: Any relative path is resolved relative to `cfg.infrastructure.data_root`.
 3. **Environment variable override**: If `QPYM2_DATA_DIR` is set in the shell environment, it overrides `data_root` as the base directory for relative paths.
@@ -80,7 +80,7 @@ Paths are resolved using deterministic rules through `qpym2.cfg.hydra_adapter_ne
 Loading configuration in Python:
 
 ```python
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager, get_config
+from qpym2.cfg.hydra_adapter import HydraConfigManager, get_config
 
 # Load default composition
 cfg = get_config()
@@ -96,7 +96,7 @@ cfg = get_config(
 Bridging to pipeline dictionaries:
 
 ```python
-from qpym2.cfg.config_builders_new import (
+from qpym2.cfg.config_builders import (
     build_staging_config,
     build_input_config,
     get_h2uv_model,

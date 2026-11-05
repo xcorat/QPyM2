@@ -5,7 +5,10 @@ Provides backward compatibility with the old model_cfg naming scheme.
 """
 
 from typing import Optional, Dict, Any
+from pathlib import Path
 from omegaconf import DictConfig
+
+from qpym2.cfg.hydra_adapter import resolve_data_path
 
 
 def get_shiftname(shift_value: float, shift_type: str = 'ushiftp') -> str:
@@ -131,14 +134,10 @@ def get_model_dir_from_config(cfg: DictConfig, model_key: Optional[str] = None) 
         >>> model_dir = get_model_dir_from_config(cfg)
         '/path/to/fits/model_gamma10_v150'
     """
-    from pathlib import Path
-    
     # Get hyperparameters
     hyperparams = cfg.get('hyperparams', {})
     co_cut = hyperparams.get('co_cuts', None)
     ndbd_cutoff = hyperparams.get('ndbd_cutoff', None)
-    co_shift = hyperparams.get('co_shift', 0.0)
-    ndbd_shift = hyperparams.get('ndbd_shift', 0.0)
     smooth = hyperparams.get('smooth', True)
     
     # Build model directory (without shifts)
@@ -150,7 +149,8 @@ def get_model_dir_from_config(cfg: DictConfig, model_key: Optional[str] = None) 
     )
     
     # Construct full path
-    fit_dir = Path(cfg.infrastructure.output_paths.fit_dir)
+    raw_fit_dir = cfg.infrastructure.output_paths.fit_dir
+    fit_dir = Path(resolve_data_path(cfg, raw_fit_dir))
     return fit_dir / model_dir
 
 

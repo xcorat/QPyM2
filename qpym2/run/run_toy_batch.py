@@ -70,10 +70,12 @@ def main():
                         help="Number of toy samples this task runs")
     parser.add_argument("--output-csv", "-o", default=None,
                         help="Path to shared output CSV (default from config)")
-    parser.add_argument("--environment", "-e", default="tech_note",
-                        help="Hydra environment name")
+    parser.add_argument("--environment", "-e", default=None,
+                        help="Hydra environment name (default from config: local)")
     parser.add_argument("--analysis", default=None,
-                        help="Analysis profile (default: same as environment)")
+                        help="Analysis profile (default from config: base)")
+    parser.add_argument("--model-key", "-m", default="default",
+                        help="Model key in config/models/ (default: default)")
     parser.add_argument("--bias-min", type=float, default=None,
                         help="Min injected signal (default from config)")
     parser.add_argument("--bias-max", type=float, default=None,
@@ -129,10 +131,9 @@ def main():
         np.random.seed(47 + seed)
 
         # Load config and build model
-        analysis = args.analysis or args.environment
-        cfg = get_config(environment=args.environment, analysis=analysis)
+        cfg = get_config(environment=args.environment, analysis=args.analysis)
         fit_dir = get_fit_dir(cfg)
-        h2uv_model = get_h2uv_model(cfg)
+        h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
 
         fit_models = _build_model_grid(
             cfg, h2uv_model,

@@ -1,6 +1,6 @@
 # QPyM2 Configuration System (v0.6)
 
-QPyM2 uses [Hydra](https://hydra.cc/) + [OmegaConf](https://omegaconf.readthedocs.io/) loaded programmatically via `qpym2.cfg.hydra_adapter.HydraConfigManager` (and the companion v0.6 adapter `qpym2.cfg.hydra_adapter_new`).
+QPyM2 uses [Hydra](https://hydra.cc/) + [OmegaConf](https://omegaconf.readthedocs.io/) loaded programmatically via `qpym2.cfg.hydra_adapter.HydraConfigManager`.
 
 Configuration is structured into four explicit, decoupled tiers that compose together into a complete analysis configuration.
 
@@ -67,7 +67,7 @@ Paths in configuration are resolved using predictable rules:
 QPyM2 loads configurations programmatically without `@hydra.main` decorators:
 
 ```python
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager, get_config
+from qpym2.cfg.hydra_adapter import HydraConfigManager, get_config
 
 # Load default composition (environments=local, staging=default, analysis=base, models=tech_note)
 cfg = HydraConfigManager.get_config()
@@ -79,9 +79,9 @@ cfg = HydraConfigManager.get_config(
 )
 ```
 
-## Helper Bridges (`qpym2.cfg.config_builders_new`)
+## Helper Bridges (`qpym2.cfg.config_builders`)
 
-`qpym2.cfg.config_builders_new` provides bridge functions adapting OmegaConf `DictConfig` structures to the plain dictionaries expected by runners:
+`qpym2.cfg.config_builders` provides bridge functions adapting OmegaConf `DictConfig` structures to the plain dictionaries expected by runners:
 - `build_staging_config(cfg)`: Extracts staging paths, tree names, and merged staging cuts.
 - `build_input_config(cfg, model_key=...)`: Builds input creation configurations.
 - `get_h2uv_model(cfg, model_key=...)`: Instantiates `TempConfig` histogram model with rotated coordinate bounds ($u, v$).

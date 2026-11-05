@@ -1,6 +1,7 @@
 import pytest
-from qpym2.cfg.hydra_adapter_new import get_config, resolve_data_path
-from qpym2.cfg.config_builders_new import (
+from omegaconf import OmegaConf
+from qpym2.cfg.hydra_adapter import get_config, resolve_data_path
+from qpym2.cfg.config_builders import (
     build_staging_config,
     build_input_config,
     get_h2uv_model,
@@ -8,6 +9,8 @@ from qpym2.cfg.config_builders_new import (
     get_artifact_store_dir,
     get_staging_dir,
     get_fit_dir,
+    get_model_storage_coords,
+    _get_model_key,
 )
 
 
@@ -85,3 +88,56 @@ def test_path_resolution():
 def test_nersc_environment_paths():
     cfg = get_config(environment="nersc")
     assert get_staging_dir(cfg) == "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging"
+
+
+def test_model_resolution_strict():
+    cfg = get_config()
+
+    # Explicit valid model key
+    assert _get_model_key(cfg, "tech_note_200") == "tech_note_200"
+
+    # Default model resolution when defaults.model_key is present in config/models/tech_note.yaml
+    assert _get_model_key(cfg, "default") == "tech_note_200"
+    assert _get_model_key(cfg, None) == "tech_note_200"
+
+    # Nonexistent model key must raise KeyError
+    with pytest.raises(KeyError, match="not found in cfg.models"):
+        _get_model_key(cfg, "nonexistent_model")
+
+    with pytest.raises(KeyError, match="not found in cfg.models"):
+        get_h2uv_model(cfg, model_key="nonexistent_model")
+
+    with pytest.raises(KeyError, match="not found in cfg.models"):
+        get_comp_cfg(cfg, model_key="nonexistent_model")
+
+    with pytest.raises(KeyError, match="not found in cfg.models"):
+        build_input_config(cfg, model_key="nonexistent_model")
+
+
+def test_model_resolution_missing_default():
+    # If a config has no 'default_model', 'defaults.model_key', and no 'default' entry in models, raise ValueError
+    cfg = OmegaConf.create({
+        "models": {
+            "custom_1": {"roi": {"threshold": 100}},
+            "custom_2": {"roi": {"threshold": 200}},
+        }
+    })
+    with pytest.raises(ValueError, match="cannot be resolved"):
+        _get_model_key(cfg, "default")
+
+    # If 'default' entry is directly in models, it resolves
+    cfg_with_default = OmegaConf.create({
+        "models": {
+            "default": {"roi": {"threshold": 100}},
+        }
+    })
+    assert _get_model_key(cfg_with_default, "default") == "default"
+
+
+def test_model_storage_coords():
+    cfg = get_config()
+    coords = get_model_storage_coords(cfg, "tech_note_200")
+    assert coords["threshold"] == 200
+    assert coords["roi"] == (2400.0, 2570.0)
+    assert coords["bin_size"] == 2.5
+    assert coords["coord"] == "h2uv"

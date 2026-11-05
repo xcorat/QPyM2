@@ -177,7 +177,7 @@ def _resolve_grid(args, default_co_cuts=None, default_ndbd_cuts=None,
 
 def build_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_types,
                    n_reps, master_seed, environment, toys_config,
-                   analysis=None):
+                   analysis=None, model_key='default'):
     rows, task_id = [], 1
     rng = random.Random(master_seed)
 
@@ -192,6 +192,8 @@ def build_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_types,
         )
         if analysis is not None:
             cmd += f' --analysis {analysis}'
+        if model_key:
+            cmd += f' --model-key {model_key}'
         cmd += (
             f' --type {fit_type}'
             f' --n 1'
@@ -213,7 +215,7 @@ def build_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_types,
 
 def build_fixed_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_type,
                          n_fits, master_seed, environment, toys_config,
-                         analysis=None):
+                         analysis=None, model_key='default'):
     """Build one row per model point for a fixed toy-like fit type."""
     rows, task_id = [], 1
     rng = random.Random(master_seed)
@@ -229,6 +231,8 @@ def build_fixed_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_type,
         )
         if analysis is not None:
             cmd += f' --analysis {analysis}'
+        if model_key:
+            cmd += f' --model-key {model_key}'
         cmd += (
             f' --type {fit_type}'
             f' --n {n_fits}'
@@ -249,7 +253,8 @@ def build_fixed_toy_grid(co_cuts, ndbd_cutoffs, co_shifts, fit_type,
 
 
 def build_fit_grid(co_cuts, ndbd_cutoffs, co_shifts,
-                   environment, chains, draws, analysis=None, prior_width='5sig'):
+                   environment, chains, draws, analysis=None, prior_width='5sig',
+                   model_key='default'):
     rows, task_id = [], 1
 
     for co_cut, ndbd_cut, co_shift in itertools.product(
@@ -261,6 +266,8 @@ def build_fit_grid(co_cuts, ndbd_cutoffs, co_shifts,
         )
         if analysis is not None:
             cmd += f' --analysis {analysis}'
+        if model_key:
+            cmd += f' --model-key {model_key}'
         cmd += (
             f' --co-cut {co_cut}'
             f' --ndbd-cutoff {ndbd_cut}'
@@ -280,7 +287,8 @@ def build_fit_grid(co_cuts, ndbd_cutoffs, co_shifts,
     return rows
 
 
-def build_input_grid(co_cuts, ndbd_cutoffs, co_shifts, environment, analysis):
+def build_input_grid(co_cuts, ndbd_cutoffs, co_shifts, environment, analysis,
+                     model_key='default'):
     """One task per (co_cut, ndbd_cutoff). All co_shifts handled in-process."""
     rows, task_id = [], 1
     shifts_str = ' '.join(str(s) for s in co_shifts)
@@ -294,6 +302,8 @@ def build_input_grid(co_cuts, ndbd_cutoffs, co_shifts, environment, analysis):
         )
         if analysis is not None:
             cmd += f' --analysis {analysis}'
+        if model_key:
+            cmd += f' --model-key {model_key}'
         cmd += (
             f' --co-cut {co_cut}'
             f' --ndbd-cutoff {ndbd_cut}'
@@ -383,7 +393,7 @@ def run_staging(args):
     # Count rows for summary
     with open(out) as f:
         n_rows = sum(1 for _ in f) - 1
-    print(f'Subcommand : staging')
+    print('Subcommand : staging')
     print(f'Generated  : {n_rows} tasks')
     print(f'Output     : {out}')
     if n_rows > 0:
@@ -402,6 +412,7 @@ def add_input_parser(subparsers):
     )
     p.add_argument('--environment', '-e', default='tech_note')
     p.add_argument('--analysis', '-a', default=None)
+    p.add_argument('--model-key', '-m', default='default')
     _add_grid_args(p)
     p.set_defaults(func=run_input)
 
@@ -422,7 +433,8 @@ def run_input(args):
 
     out = args.out or os.path.join(PARAMS_DIR, 'input_params.tsv')
     rows = build_input_grid(co_cuts, ndbd_cutoffs, co_shifts,
-                            args.environment, args.analysis)
+                            args.environment, args.analysis,
+                            model_key=args.model_key)
     _write_tsv(rows, out, FIELDNAMES_INPUT)
     _print_summary('input', rows, out)
 
@@ -439,6 +451,7 @@ def add_fit_parser(subparsers):
     )
     p.add_argument('--environment', '-e', default='tech_note')
     p.add_argument('--analysis', '-a', default=None)
+    p.add_argument('--model-key', '-m', default='default')
     p.add_argument('--chains', type=int, default=8)
     p.add_argument('--draws', type=int, default=20000)
     p.add_argument('--prior-width', choices=['5sig', '10sig', 'syst', '2syst'], default='5sig')
@@ -457,7 +470,8 @@ def run_fit(args):
     out = args.out or os.path.join(PARAMS_DIR, 'fit_params.tsv')
     rows = build_fit_grid(co_cuts, ndbd_cutoffs, co_shifts,
                           args.environment, args.chains, args.draws,
-                          analysis=args.analysis, prior_width=args.prior_width)
+                          analysis=args.analysis, prior_width=args.prior_width,
+                          model_key=args.model_key)
     _write_tsv(rows, out, FIELDNAMES_GRID)
     _print_summary('fit', rows, out)
 
@@ -474,6 +488,7 @@ def add_toylike_parser(subparsers, run_type):
     )
     p.add_argument('--environment', '-e', default='tech_note')
     p.add_argument('--analysis', '-a', default=None)
+    p.add_argument('--model-key', '-m', default='default')
     p.add_argument('--n-fits', type=int, default=200,
                    help='Number of fits to run per model-point task (default: 200)')
     p.add_argument('--toys-config', default='batch',
@@ -495,7 +510,8 @@ def run_toylike(args):
     rows = build_fixed_toy_grid(co_cuts, ndbd_cutoffs, co_shifts,
                                 args.run_type, args.n_fits, args.seed,
                                 args.environment, args.toys_config,
-                                analysis=args.analysis)
+                                analysis=args.analysis,
+                                model_key=args.model_key)
     _write_tsv(rows, out, FIELDNAMES_GRID)
     _print_summary(args.run_type, rows, out)
 
@@ -530,6 +546,7 @@ def add_syst_mc_parser(subparsers):
     )
     p.add_argument('--environment', '-e', default='m2v5-1')
     p.add_argument('--analysis', '-a', default='tech_note')
+    p.add_argument('--model-key', '-m', default='default')
     p.add_argument('--co-shift', nargs='+', type=float, default=None,
                    help=f'co_shift values (default: all {ALL_CO_SHIFTS})')
     p.add_argument('--n', type=int, default=_SYST_MC_N,
@@ -566,6 +583,8 @@ def run_syst_mc(args):
         )
         if args.analysis is not None:
             cmd += f' --analysis {args.analysis}'
+        if getattr(args, 'model_key', None):
+            cmd += f' --model-key {args.model_key}'
         cmd += (
             f' --co-cut {_SYST_MC_CO_CUT}'
             f' --ndbd-cutoff {_SYST_MC_NDBD_CUT}'
@@ -606,6 +625,7 @@ def add_syst_lss_parser(subparsers):
                    help='LSS systematic type: sscl (sigma-scaling) or dq (Q-residual)')
     p.add_argument('--environment', '-e', default='m2v5-1')
     p.add_argument('--analysis', '-a', default='tech_note')
+    p.add_argument('--model-key', '-m', default='default')
     p.add_argument('--lss-data-path', required=True,
                    help='Path to per-dataset LSS ROOT files')
     p.add_argument('--co-shift', nargs='+', type=float, default=None,
@@ -647,6 +667,8 @@ def run_syst_lss(args):
         )
         if args.analysis is not None:
             cmd += f' --analysis {args.analysis}'
+        if getattr(args, 'model_key', None):
+            cmd += f' --model-key {args.model_key}'
         cmd += (
             f' --lss-data-path {args.lss_data_path}'
             f' --co-cut {_SYST_LSS_CO_CUT}'
@@ -677,7 +699,7 @@ def run_syst_lss(args):
             'command': cmd,
         })
 
-    out = args.out or os.path.join(PARAMS_DIR, f'syst_lss_params.tsv')
+    out = args.out or os.path.join(PARAMS_DIR, 'syst_lss_params.tsv')
     if getattr(args, 'append', False):
         _write_tsv_append(rows, out, FIELDNAMES_SYST_LSS)
     else:

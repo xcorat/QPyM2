@@ -14,7 +14,7 @@ def _():
     import marimo as mo
     import pandas as pd
 
-    from qpym2.cfg.config_builders_new import (
+    from qpym2.cfg.config_builders import (
         build_data_config,
         build_mc_config,
         build_ndbd_config,
@@ -22,7 +22,7 @@ def _():
         get_artifact_store_dir,
         get_jags_path,
     )
-    from qpym2.cfg.hydra_adapter_new import (
+    from qpym2.cfg.hydra_adapter import (
         HydraConfigManager,
         get_config,
         resolve_config_dir,

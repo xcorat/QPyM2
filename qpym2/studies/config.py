@@ -11,8 +11,8 @@ from typing import List, Optional, Tuple, Union
 import logging
 from omegaconf import DictConfig, OmegaConf
 
-from qpym2.cfg.hydra_adapter_new import HydraConfigManager, get_repo_root
-from qpym2.cfg.config_builders_new import get_fit_data_dir
+from qpym2.cfg.hydra_adapter import HydraConfigManager, get_repo_root
+from qpym2.cfg.config_builders import get_fit_data_dir
 
 logger = logging.getLogger(__name__)
 

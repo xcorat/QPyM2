@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from omegaconf import DictConfig
 
-from qpym2.cfg.config_builders_new import (
+from qpym2.cfg.config_builders import (
     get_fit_data_dir,
     get_model_storage_coords,
     get_h2uv_model,

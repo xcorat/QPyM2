@@ -22,16 +22,16 @@ defaults:
 
 ## Programmatic Access
 
-Load configurations using `qpym2.cfg.hydra_adapter_new` (or `qpym2.cfg.hydra_adapter`):
+Load configurations using `qpym2.cfg.hydra_adapter`:
 ```python
-from qpym2.cfg.hydra_adapter_new import get_config
+from qpym2.cfg.hydra_adapter import get_config
 
 cfg = get_config(environment="local", analysis="base", model="tech_note")
 ```
 
-Adapt to pipeline dicts using `qpym2.cfg.config_builders_new`:
+Adapt to pipeline dicts using `qpym2.cfg.config_builders`:
 ```python
-from qpym2.cfg.config_builders_new import (
+from qpym2.cfg.config_builders import (
     build_staging_config,
     build_input_config,
     get_h2uv_model,

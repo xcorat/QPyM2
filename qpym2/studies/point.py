@@ -33,7 +33,7 @@ class StudyPoint:
 
     point_id: str
     task_id: int = 0
-    model_key: str = "tech_note_200"
+    model_key: str = "default"
     co_cut: Optional[str] = None
     ndbd_cutoff: Optional[str] = None
     co_shift: float = 0.0

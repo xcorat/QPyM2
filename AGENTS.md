@@ -86,7 +86,7 @@ argparse subparsers (`sscl` / `dq`).
 ## Configuration
 
 Hydra + OmegaConf loaded **programmatically**, not via `@hydra.main` and not
-exposed as CLI flags. `qpym2.cfg.hydra_adapter_new.get_config(environment=, analysis=, model=, ...)`
+exposed as CLI flags. `qpym2.cfg.hydra_adapter.get_config(environment=, analysis=, model=, ...)`
 calls `compose()` over `config/config.yaml`.
 
 - Master defaults (`config/config.yaml`): `environments: local`,
@@ -98,7 +98,7 @@ calls `compose()` over `config/config.yaml`.
 - Legacy pre-v0.6 configs are backed up in `config_old/`.
 - Actual layout uses Hydra `defaults:` composition and `.yaml` extensions. See
   `config/README.md` and `config/config_guide.md`; the live YAML is the source of truth.
-- `qpym2/cfg/config_builders_new.py` adapts `DictConfig` into the plain dicts the
+- `qpym2/cfg/config_builders.py` adapts `DictConfig` into the plain dicts the
   runners expect (`build_staging_config`, `build_input_config`, `get_h2uv_model`,
   `get_comp_cfg`, `get_artifact_store_dir`, ...). Path resolution is rooted at
   `infrastructure.data_root` (or `QPYM2_DATA_DIR`).
@@ -110,7 +110,9 @@ marker is registered, and the default `addopts` is `-m 'not integration'`. Tests
 split into:
 
 - Pure (no data/ROOT): `qpym2/tests/test_staging_transforms.py`,
-  `test_make_fik_digitize.py`, `test_fit_syst.py`, `test_hydra_adapter.py`.
+  `test_make_fik_digitize.py`, `test_fit_syst.py`, `test_hydra_adapter.py`,
+  `test_config_composition.py`, `test_storage.py`, `test_storage_fit.py`,
+  `test_storage_inputs.py`, `test_studies.py`.
 - Integration (`@pytest.mark.integration`): need real config + `/global/...`
   data — `qpym2/tests/test_run_fits.py`.
 

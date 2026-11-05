@@ -24,7 +24,7 @@ import argparse
 from qpym2.cfg.hydra_adapter import get_config
 from qpym2.cfg.config_builders import (
     get_jags_path, get_data_names, get_fit_dir, get_h2uv_model, get_comp_cfg,
-    get_input_fname, get_corrmat_path,
+    get_corrmat_path,
 )
 from qpym2.io import fit as fit_io
 from qpym2.io.fit import read_input
@@ -171,11 +171,14 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--environment', '-e', default='tech_note',
-        help='Hydra environment config name (default: tech_note)')
+        '--environment', '-e', default=None,
+        help='Hydra environment config name (default from config: local)')
     parser.add_argument(
         '--analysis', '-a', default=None,
-        help='Analysis profile name (default: same as environment)')
+        help='Analysis profile name (default from config: base)')
+    parser.add_argument(
+        '--model-key', '-m', default='default',
+        help='Model key in config/models/ (default: default)')
 
     # Model point parameters
     parser.add_argument(
@@ -278,15 +281,14 @@ def main():
     args = parse_args()
 
     # Load Hydra configuration
-    analysis = args.analysis or args.environment
-    cfg = get_config(environment=args.environment, analysis=analysis)
+    cfg = get_config(environment=args.environment, analysis=args.analysis)
 
     # Derive paths and objects from config
     jags_fpath = get_jags_path(cfg)
     data_name, data_blinded_name = get_data_names(cfg)
     fit_dir = get_fit_dir(cfg)
-    h2uv_model = get_h2uv_model(cfg)
-    comp_cfg = get_comp_cfg(cfg)
+    h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
+    comp_cfg = get_comp_cfg(cfg, model_key=args.model_key)
 
     # Prepare JAGS MC chain samples for prior computation
     chain = read_mkchain(jags_fpath)

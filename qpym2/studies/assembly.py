@@ -57,7 +57,7 @@ def _format_point_id(task_id: int, swept_params: Dict[str, Any]) -> str:
 def expand_study_points(
     reference: Dict[str, Any],
     sweep: Optional[Dict[str, Any]] = None,
-    default_model_key: str = "tech_note_200",
+    default_model_key: str = "default",
 ) -> List[StudyPoint]:
     """
     Expand reference parameters and parameter sweep into a list of StudyPoints.
@@ -181,7 +181,7 @@ def assemble_study(
 
     defaults_sec = cfg.get("defaults", {})
     default_model_key = str(
-        defaults_sec.get("model_key") or defaults_sec.get("models") or "tech_note_200"
+        defaults_sec.get("model_key") or defaults_sec.get("models") or "default"
     )
 
     reference = OmegaConf.to_container(cfg.get("reference", {}), resolve=True) if "reference" in cfg else {}

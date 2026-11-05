@@ -146,17 +146,15 @@ def _setup_common(args):
     from qpym2.io.bkg_model import read_jagsh5
     from qpym2.fit.bias import read_bias_csv
 
-    analysis = args.analysis or args.environment
     cfg = get_config(
         environment=args.environment,
-        analysis=analysis,
-        hyperparams=args.hyperparams,
+        analysis=args.analysis,
     )
 
     jags_fpath = get_jags_path(cfg)
-    h2uv_model = get_h2uv_model(cfg)
-    comp_cfg_base = get_comp_cfg(cfg)
-    input_cfg = build_input_config(cfg)
+    h2uv_model = get_h2uv_model(cfg, model_key=args.model_key)
+    comp_cfg_base = get_comp_cfg(cfg, model_key=args.model_key)
+    input_cfg = build_input_config(cfg, model_key=args.model_key)
     syst_dir = get_systematic_dir(cfg)
 
     # Build model config (no co_shift on background for this systematic)
@@ -369,9 +367,9 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description='0νββ signal energy-shift systematic fits.',
     )
-    parser.add_argument('--environment', '-e', default='m2v5-1')
-    parser.add_argument('--analysis', '-a', default='tech_note')
-    parser.add_argument('--hyperparams', default=None)
+    parser.add_argument('--environment', '-e', default=None)
+    parser.add_argument('--analysis', '-a', default=None)
+    parser.add_argument('--model-key', '-m', default='default')
     parser.add_argument('--co-cut', default='gamma10_v150')
     parser.add_argument('--ndbd-cutoff', default='u1740')
     parser.add_argument('--draws', type=int, default=4000)

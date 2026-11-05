@@ -19,7 +19,7 @@ def _():
     import pandas as pd
     from scipy.optimize import curve_fit
 
-    from qpym2.cfg.hydra_adapter_new import (
+    from qpym2.cfg.hydra_adapter import (
         HydraConfigManager,
         get_config,
         resolve_config_dir,

@@ -23,7 +23,7 @@ _DEFAULT_LSS_SYST_SAMPLES = DEFAULT_LSS_SYST_SAMPLES
 # LSS systematic configuration
 # ---------------------------------------------------------------------------
 
-def get_lss_config(cfg):
+def get_lss_config(cfg, model_key="default"):
     """Build LSS systematic configuration from Hydra config.
 
     Extracts the systematic staging directory, dataset list, and
@@ -32,11 +32,12 @@ def get_lss_config(cfg):
 
     Args:
         cfg: Hydra configuration object.
+        model_key: Named model key (default: 'default').
 
     Returns:
         tuple: (syst_stg_cfg, datasets, syst_samples_dict)
     """
-    input_cfg = build_input_config(cfg)
+    input_cfg = build_input_config(cfg, model_key=model_key)
     syst_stg_cfg = input_cfg.copy()
 
     if hasattr(cfg, 'systematics') and hasattr(cfg.systematics, 'lss'):

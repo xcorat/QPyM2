@@ -1,6 +1,10 @@
 """
 Create staging ROOT files from raw data for M2 analysis.
 
+.. deprecated:: 0.6.0
+    run_create_staging is deprecated. Staging generation will be handled
+    by the validated staging identity/manifest pipeline.
+
 Staging files are intermediate, standardized ROOT files with u,v transformed
 coordinates and quality-filtered events.
 
