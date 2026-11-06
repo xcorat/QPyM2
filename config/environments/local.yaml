@@ -20,6 +20,7 @@ infrastructure:
   data_files:
     bkg_syst_corrmat: "BM_1ton/fit/Output/default/CorrelationMatrix.csv"
     lss_data_path: "/data/cuore/Software/nersc-modern-docker/cuoremc-git/ares/data/Nature2021"
+    results_raw: "/data/cuore/Analysis/BMMC/inputs/ResultsRaw.h5"
 
 system:
   verbose_logging: false

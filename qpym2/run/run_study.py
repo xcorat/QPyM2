@@ -152,9 +152,15 @@ def parse_args():
         help="Merge systematic task results, combine mixture posteriors, and compute delta shifts",
     )
     parser.add_argument(
+        "--marginalize",
+        action="store_true",
+        default=False,
+        help="Execute full rate marginalisation, PSA convolution, and limit extraction",
+    )
+    parser.add_argument(
         "--category",
         default=None,
-        help="Systematic category override (e.g. bmmc, lss_sscl, lss_dq)",
+        help="Systematic category override (e.g. bmmc, lss_sscl, lss_dq, bm_threshold, bm_binning, bin_size)",
     )
     parser.add_argument(
         "--dq-mode",
@@ -396,6 +402,11 @@ def main():
     if args.collect_syst or args.run_syst:
         print("[INFO] Collecting systematic results and computing delta shifts...")
         study.collect_syst_results(bias_calibration=args.sens_bias_calib, verbose=args.verbose)
+
+    # 16. Rate marginalisation if requested
+    if args.marginalize:
+        print(f"[INFO] Running rate marginalisation for '{study.name}'...")
+        study.run_marginalization(bias_calibration=args.sens_bias_calib, verbose=args.verbose)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,29 @@
+study:
+  name: example_bm_binning_study
+  type: syst
+  description: "Background model binning systematic study"
+
+defaults:
+  environment: local
+  staging: default
+  analysis: base
+  models: tech_note
+  model_key: tech_note_200
+
+reference:
+  co_cut: gamma10_v150
+  ndbd_cutoff: u1740
+  co_shift: 1.0
+  ndbd_shift: 0.0
+  blinded: false
+
+syst:
+  category: bm_binning
+  variants:
+    - "MinBinSize_5_20"
+    - "MinBinSize_25_60"
+    - "BinningIntraAlphaBands"
+  chains: 2
+  draws: 2500
+  tune: 500
+  bias_calibration: "studies/example_bias_study/bias_calibration.json"

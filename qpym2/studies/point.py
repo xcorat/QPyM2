@@ -1484,3 +1484,912 @@ class StudyPoint:
             )
 
         return task_csv, task_h5
+
+    def check_syst_bm_threshold(
+        self,
+        study_dir: Union[str, Path],
+        variant: str = "Threshold250",
+    ) -> Dict[str, Any]:
+        """Check completion status of BM threshold systematic fit for this study point."""
+        sdir = Path(study_dir)
+        task_csv = sdir / "tasks" / f"syst_bm_threshold_{self.point_id}.csv"
+        task_h5 = sdir / "tasks" / f"syst_bm_threshold_{self.point_id}_samples.h5"
+
+        is_done = False
+        row_count = 0
+        if task_csv.exists() and task_csv.stat().st_size > 0:
+            import pandas as pd
+            try:
+                df = pd.read_csv(task_csv)
+                row_count = len(df)
+                is_done = row_count >= 1 and task_h5.exists() and task_h5.stat().st_size > 0
+            except Exception:
+                pass
+
+        return {
+            "point_id": self.point_id,
+            "task_id": self.task_id,
+            "model_key": self.model_key,
+            "co_shift": self.co_shift,
+            "ndbd_shift": self.ndbd_shift,
+            "co_cut": self.co_cut,
+            "ndbd_cutoff": self.ndbd_cutoff,
+            "category": "bm_threshold",
+            "variant": variant,
+            "n_samples_target": 1,
+            "n_samples_completed": row_count,
+            "is_completed": is_done,
+            "task_csv": str(task_csv),
+            "task_h5": str(task_h5),
+            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
+        }
+
+    def run_syst_bm_threshold(
+        self,
+        cfg: DictConfig,
+        study_dir: Union[str, Path],
+        variant: str = "Threshold250",
+        model_key_syst: str = "tech_note_250",
+        results_raw_path: Optional[Union[str, Path]] = None,
+        seed: int = 42,
+        chains: int = 2,
+        draws: int = 2500,
+        tune: int = 500,
+        target_accept: float = 0.9,
+        single_core: bool = True,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        dedicated_bias_csv: Optional[Union[str, Path]] = None,
+        fit_fn: Optional[Any] = None,
+        save_traces: bool = False,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Tuple[Path, Path]:
+        """Execute BM threshold systematic fit (e.g. Threshold250 vs Threshold200)."""
+        import contextlib
+        import json
+        import h5py
+        import numpy as np
+        import pandas as pd
+
+        sdir = Path(study_dir)
+        tasks_dir = sdir / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_csv = tasks_dir / f"syst_bm_threshold_{self.point_id}.csv"
+        task_h5 = tasks_dir / f"syst_bm_threshold_{self.point_id}_samples.h5"
+
+        if not force:
+            status = self.check_syst_bm_threshold(study_dir, variant=variant)
+            if status["is_completed"]:
+                if verbose:
+                    print(f"[{self.point_id}] BM threshold fit already completed. Skipping.")
+                return task_csv, task_h5
+
+        from qpym2.cfg.config_builders import get_results_raw_path, get_comp_cfg, get_jags_path
+        from qpym2.io.bkg_model import read_bm_variant_modes
+        from qpym2.storage.fits import (
+            setup_storage_fit,
+            assemble_fit_components,
+            resolve_storage_coords,
+            resolve_fit_template_uuids,
+        )
+
+        raw_path = results_raw_path or get_results_raw_path(cfg)
+        if not raw_path or not Path(raw_path).exists():
+            default_path = Path("/data/cuore/Analysis/BMMC/inputs/ResultsRaw.h5")
+            if default_path.exists():
+                raw_path = default_path
+            else:
+                raise FileNotFoundError(
+                    f"ResultsRaw.h5 not found at '{raw_path}'. Configure infrastructure.data_files.results_raw."
+                )
+
+        bm_modes = read_bm_variant_modes(raw_path, variant)
+
+        # Storage fit setup for systematic model key (ROI threshold=250)
+        coords_syst, hm_syst, _, input_dir_syst = resolve_storage_coords(cfg, model_key=model_key_syst)
+        comp_cfg_raw_syst = [dict(c) for c in get_comp_cfg(cfg, model_key=model_key_syst)]
+
+        fit_setup_syst = setup_storage_fit(
+            cfg=cfg,
+            model_key=model_key_syst,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+            blinded=self.blinded,
+            prior_width="5sig",
+            mkchain_samples=100,
+            chains=chains,
+            draws=draws,
+            tune=tune,
+            target_accept=target_accept,
+            dry_run=False,
+        )
+
+        data_syst = fit_setup_syst["data"]
+        xedges_syst, yedges_syst = fit_setup_syst["edges"]
+        nominal_comps_syst = fit_setup_syst["fit_comps"]
+        nominal_priors_syst = list(nominal_comps_syst["prior"])
+
+        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
+            cfg=cfg,
+            model_key=model_key_syst,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+        )
+
+        mctable_syst, signal_df_syst, _, _ = assemble_fit_components(
+            input_dir=input_dir_syst,
+            jags_fpath=get_jags_path(cfg),
+            comp_cfg=comp_cfg_raw_syst,
+            hm=hm_syst,
+            uuid_base=uuid_base,
+            uuid_co=uuid_co,
+            uuid_ndbd=uuid_ndbd,
+        )
+
+        # Override norms from systematic BM modes
+        mt_syst = mctable_syst.copy()
+        mt_syst["norm"] = bm_modes.reindex(mt_syst.index).fillna(0.0)
+
+        from qpym2.models import m2
+        bkg_comps_syst = m2.make_bkgcomps_table(comp_cfg_raw_syst, mt_syst, smooth=hm_syst.smooth)
+        comps_syst = pd.concat([bkg_comps_syst, signal_df_syst], join="inner")
+        comps_syst["prior"] = nominal_priors_syst
+        comps_syst["varname"] = comps_syst.index
+
+        # Bias calibration resolution
+        popt = None
+        if dedicated_bias_csv:
+            dpath = Path(dedicated_bias_csv)
+            if not dpath.is_absolute():
+                dpath = sdir / dpath if (sdir / dpath).exists() else Path(dpath)
+            if dpath.exists():
+                from qpym2.fit.bias import get_bias_from_fitdf
+                vbias_df = pd.read_csv(str(dpath))
+                popt, _ = get_bias_from_fitdf(vbias_df)
+
+        if popt is None and isinstance(bias_calibration, dict):
+            calib = bias_calibration.get(self.point_id) or bias_calibration
+            if "a" in calib and "b" in calib:
+                popt = (float(calib["a"]), float(calib["b"]))
+        elif popt is None and bias_calibration is not None:
+            cpath = Path(bias_calibration)
+            if not cpath.is_absolute():
+                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+                calib = calib_dict.get(self.point_id) or calib_dict
+                if "a" in calib and "b" in calib:
+                    popt = (float(calib["a"]), float(calib["b"]))
+
+        # Optional trace directory
+        traces_dir = sdir / "traces"
+        if save_traces:
+            traces_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import pymc.sampling.parallel as _parallel
+            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
+        except Exception:
+            pass
+
+        from qpym2.fit.bias import apply_bias_correction
+        from qpym2.fit.results import _get_stats
+        from qpym2.utils.mathy import get_mode
+        import pymc as pm
+
+        fit_seed = int(seed + self.task_id * 10000 + 1)
+        np.random.seed(fit_seed)
+
+        if fit_fn is not None:
+            trace = fit_fn(data_syst, comps_syst, xedges_syst, yedges_syst)
+        else:
+            fik = m2.make_fik(comps_syst, data_syst, xedges_syst, yedges_syst)
+            model = m2.m2_model(comps_syst, fik)
+            with model:
+                trace = pm.sample(
+                    draws=draws,
+                    tune=tune,
+                    chains=chains,
+                    cores=1 if single_core else chains,
+                    return_inferencedata=True,
+                    target_accept=target_accept,
+                    progressbar=False,
+                    idata_kwargs={"log_likelihood": True},
+                    random_seed=fit_seed,
+                )
+
+        if save_traces and hasattr(trace, "to_netcdf"):
+            trace_path = traces_dir / f"trace_bm_threshold_{variant}_{self.point_id}.nc"
+            trace.to_netcdf(str(trace_path))
+
+        ndbd_post = trace.posterior["ndbd"].values.flatten()
+        stats = _get_stats(ndbd_post)
+        mode_val = float(stats["mode"])
+        p16_val = float(stats["p16"])
+        p90_val = float(stats["p90"])
+
+        logp_val = 0.0
+        if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
+            ll = trace.log_likelihood
+            if hasattr(ll, "pik"):
+                arr = np.asarray(ll.pik.values).flatten()
+            elif isinstance(ll, dict) and "pik" in ll:
+                arr = np.asarray(ll["pik"]).flatten()
+            else:
+                arr = np.array([])
+            if len(arr) > 1:
+                try:
+                    logp_val = float(get_mode(arr))
+                except Exception:
+                    logp_val = float(np.median(arr))
+            elif len(arr) == 1:
+                logp_val = float(arr[0])
+
+        mode_bc = p16_bc = p90_bc = np.nan
+        if popt is not None:
+            corrected = apply_bias_correction(ndbd_post, popt)
+            mode_bc = float(get_mode(corrected))
+            p16_bc = float(np.percentile(corrected, 16))
+            p90_bc = float(np.percentile(corrected, 90))
+
+        row = {
+            "variant": variant,
+            "task_id": self.task_id,
+            "point_id": self.point_id,
+            "model_key": self.model_key,
+            "model_key_syst": model_key_syst,
+            "co_shift": self.co_shift,
+            "ndbd_shift": self.ndbd_shift,
+            "co_cut": str(self.co_cut),
+            "ndbd_cutoff": str(self.ndbd_cutoff),
+            "ndbd_mode": mode_val,
+            "ndbd_p16": p16_val,
+            "ndbd_p90": p90_val,
+            "max_logp": logp_val,
+            "ndbd_mode_bc": mode_bc,
+            "ndbd_p16_bc": p16_bc,
+            "ndbd_p90_bc": p90_bc,
+        }
+
+        for cname in comps_syst.index:
+            if cname != "ndbd" and cname in trace.posterior:
+                c_post = trace.posterior[cname].values.flatten()
+                row[f"{cname}_mode"] = float(get_mode(c_post))
+
+        # Write HDF5 with posterior samples
+        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
+        with h5py.File(temp_h5, "w") as h5f:
+            h5f.create_dataset(
+                "ndbd_samples",
+                data=np.array([ndbd_post], dtype=float),
+                compression="gzip",
+                compression_opts=4,
+            )
+            h5f.create_dataset("max_logp", data=np.array([logp_val], dtype=float))
+            h5f.attrs["point_id"] = self.point_id
+            h5f.attrs["variant"] = variant
+            h5f.attrs["model_key_syst"] = model_key_syst
+            h5f.attrs["category"] = "bm_threshold"
+        temp_h5.replace(task_h5)
+
+        # Write CSV
+        df_res = pd.DataFrame([row])
+        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
+        df_res.to_csv(temp_csv, index=False)
+        temp_csv.replace(task_csv)
+
+        if verbose:
+            print(f"[{self.point_id}] Saved BM threshold fit ({variant}): {task_csv} and {task_h5}")
+
+        return task_csv, task_h5
+
+    def check_syst_bm_binning(
+        self,
+        study_dir: Union[str, Path],
+        variants: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Check completion status of BM binning systematic fits for this study point."""
+        sdir = Path(study_dir)
+        _vars = variants if variants is not None else [
+            "MinBinSize_5_20", "MinBinSize_25_60", "BinningIntraAlphaBands"
+        ]
+        target_n = len(_vars)
+        task_csv = sdir / "tasks" / f"syst_bm_binning_{self.point_id}.csv"
+        task_h5 = sdir / "tasks" / f"syst_bm_binning_{self.point_id}_samples.h5"
+
+        is_done = False
+        row_count = 0
+        if task_csv.exists() and task_csv.stat().st_size > 0:
+            import pandas as pd
+            try:
+                df = pd.read_csv(task_csv)
+                row_count = len(df)
+                is_done = row_count >= target_n and task_h5.exists() and task_h5.stat().st_size > 0
+            except Exception:
+                pass
+
+        return {
+            "point_id": self.point_id,
+            "task_id": self.task_id,
+            "model_key": self.model_key,
+            "co_shift": self.co_shift,
+            "ndbd_shift": self.ndbd_shift,
+            "co_cut": self.co_cut,
+            "ndbd_cutoff": self.ndbd_cutoff,
+            "category": "bm_binning",
+            "variants": _vars,
+            "n_samples_target": target_n,
+            "n_samples_completed": row_count,
+            "is_completed": is_done,
+            "task_csv": str(task_csv),
+            "task_h5": str(task_h5),
+            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
+        }
+
+    def run_syst_bm_binning(
+        self,
+        cfg: DictConfig,
+        study_dir: Union[str, Path],
+        variants: Optional[List[str]] = None,
+        results_raw_path: Optional[Union[str, Path]] = None,
+        seed: int = 42,
+        chains: int = 2,
+        draws: int = 2500,
+        tune: int = 500,
+        target_accept: float = 0.9,
+        single_core: bool = True,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        fit_fn: Optional[Any] = None,
+        save_traces: bool = False,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Tuple[Path, Path]:
+        """Execute BM binning systematic fits across variants (MinBinSize, IntraAlpha)."""
+        import contextlib
+        import json
+        import h5py
+        import numpy as np
+        import pandas as pd
+
+        _vars = variants if variants is not None else [
+            "MinBinSize_5_20", "MinBinSize_25_60", "BinningIntraAlphaBands"
+        ]
+
+        sdir = Path(study_dir)
+        tasks_dir = sdir / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_csv = tasks_dir / f"syst_bm_binning_{self.point_id}.csv"
+        task_h5 = tasks_dir / f"syst_bm_binning_{self.point_id}_samples.h5"
+
+        if not force:
+            status = self.check_syst_bm_binning(study_dir, variants=_vars)
+            if status["is_completed"]:
+                if verbose:
+                    print(
+                        f"[{self.point_id}] BM binning fits already completed ({status['n_samples_completed']} variants). Skipping."
+                    )
+                return task_csv, task_h5
+
+        from qpym2.cfg.config_builders import get_results_raw_path, get_comp_cfg, get_jags_path
+        from qpym2.io.bkg_model import read_bm_variant_modes
+        from qpym2.storage.fits import (
+            setup_storage_fit,
+            assemble_fit_components,
+            resolve_storage_coords,
+            resolve_fit_template_uuids,
+        )
+
+        raw_path = results_raw_path or get_results_raw_path(cfg)
+        if not raw_path or not Path(raw_path).exists():
+            default_path = Path("/data/cuore/Analysis/BMMC/inputs/ResultsRaw.h5")
+            if default_path.exists():
+                raw_path = default_path
+            else:
+                raise FileNotFoundError(
+                    f"ResultsRaw.h5 not found at '{raw_path}'. Configure infrastructure.data_files.results_raw."
+                )
+
+        # Nominal fit setup (shapes and data remain unchanged for binning variants)
+        coords, hm, _, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
+        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
+
+        fit_setup = setup_storage_fit(
+            cfg=cfg,
+            model_key=self.model_key,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+            blinded=self.blinded,
+            prior_width="5sig",
+            mkchain_samples=100,
+            chains=chains,
+            draws=draws,
+            tune=tune,
+            target_accept=target_accept,
+            dry_run=False,
+        )
+
+        data = fit_setup["data"]
+        xedges, yedges = fit_setup["edges"]
+        nominal_comps = fit_setup["fit_comps"]
+        nominal_priors = list(nominal_comps["prior"])
+
+        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
+            cfg=cfg,
+            model_key=self.model_key,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+        )
+
+        mctable, signal_df, _, _ = assemble_fit_components(
+            input_dir=input_dir,
+            jags_fpath=get_jags_path(cfg),
+            comp_cfg=comp_cfg_raw,
+            hm=hm,
+            uuid_base=uuid_base,
+            uuid_co=uuid_co,
+            uuid_ndbd=uuid_ndbd,
+        )
+
+        # Resolve bias calibration
+        popt = None
+        if isinstance(bias_calibration, dict):
+            calib = bias_calibration.get(self.point_id) or bias_calibration
+            if "a" in calib and "b" in calib:
+                popt = (float(calib["a"]), float(calib["b"]))
+        elif bias_calibration is not None:
+            cpath = Path(bias_calibration)
+            if not cpath.is_absolute():
+                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+                calib = calib_dict.get(self.point_id) or calib_dict
+                if "a" in calib and "b" in calib:
+                    popt = (float(calib["a"]), float(calib["b"]))
+
+        traces_dir = sdir / "traces"
+        if save_traces:
+            traces_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import pymc.sampling.parallel as _parallel
+            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
+        except Exception:
+            pass
+
+        from qpym2.models import m2
+        from qpym2.fit.bias import apply_bias_correction
+        from qpym2.fit.results import _get_stats
+        from qpym2.utils.mathy import get_mode
+        import pymc as pm
+
+        rows = []
+        all_ndbd_samples = []
+        all_max_logp = []
+
+        for idx, v in enumerate(_vars):
+            v_seed = int(seed + self.task_id * 10000 + idx + 1)
+            np.random.seed(v_seed)
+
+            bm_modes_v = read_bm_variant_modes(raw_path, v)
+            mt_v = mctable.copy()
+            mt_v["norm"] = bm_modes_v.reindex(mt_v.index).fillna(0.0)
+
+            bkg_comps_v = m2.make_bkgcomps_table(comp_cfg_raw, mt_v, smooth=hm.smooth)
+            comps_v = pd.concat([bkg_comps_v, signal_df], join="inner")
+            comps_v["prior"] = nominal_priors
+            comps_v["varname"] = comps_v.index
+
+            if fit_fn is not None:
+                trace = fit_fn(data, comps_v, xedges, yedges)
+            else:
+                fik_v = m2.make_fik(comps_v, data, xedges, yedges)
+                model_v = m2.m2_model(comps_v, fik_v)
+                with model_v:
+                    trace = pm.sample(
+                        draws=draws,
+                        tune=tune,
+                        chains=chains,
+                        cores=1 if single_core else chains,
+                        return_inferencedata=True,
+                        target_accept=target_accept,
+                        progressbar=False,
+                        idata_kwargs={"log_likelihood": True},
+                        random_seed=v_seed,
+                    )
+
+            if save_traces and hasattr(trace, "to_netcdf"):
+                trace_path = traces_dir / f"trace_bm_binning_{v}_{self.point_id}.nc"
+                trace.to_netcdf(str(trace_path))
+
+            ndbd_post = trace.posterior["ndbd"].values.flatten()
+            all_ndbd_samples.append(ndbd_post)
+
+            stats = _get_stats(ndbd_post)
+            mode_val = float(stats["mode"])
+            p16_val = float(stats["p16"])
+            p90_val = float(stats["p90"])
+
+            logp_val = 0.0
+            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
+                ll = trace.log_likelihood
+                if hasattr(ll, "pik"):
+                    arr = np.asarray(ll.pik.values).flatten()
+                elif isinstance(ll, dict) and "pik" in ll:
+                    arr = np.asarray(ll["pik"]).flatten()
+                else:
+                    arr = np.array([])
+                if len(arr) > 1:
+                    try:
+                        logp_val = float(get_mode(arr))
+                    except Exception:
+                        logp_val = float(np.median(arr))
+                elif len(arr) == 1:
+                    logp_val = float(arr[0])
+            all_max_logp.append(logp_val)
+
+            mode_bc = p16_bc = p90_bc = np.nan
+            if popt is not None:
+                corrected = apply_bias_correction(ndbd_post, popt)
+                mode_bc = float(get_mode(corrected))
+                p16_bc = float(np.percentile(corrected, 16))
+                p90_bc = float(np.percentile(corrected, 90))
+
+            row = {
+                "variant": v,
+                "task_id": self.task_id,
+                "point_id": self.point_id,
+                "model_key": self.model_key,
+                "co_shift": self.co_shift,
+                "ndbd_shift": self.ndbd_shift,
+                "co_cut": str(self.co_cut),
+                "ndbd_cutoff": str(self.ndbd_cutoff),
+                "ndbd_mode": mode_val,
+                "ndbd_p16": p16_val,
+                "ndbd_p90": p90_val,
+                "max_logp": logp_val,
+                "ndbd_mode_bc": mode_bc,
+                "ndbd_p16_bc": p16_bc,
+                "ndbd_p90_bc": p90_bc,
+            }
+
+            for cname in comps_v.index:
+                if cname != "ndbd" and cname in trace.posterior:
+                    c_post = trace.posterior[cname].values.flatten()
+                    row[f"{cname}_mode"] = float(get_mode(c_post))
+
+            rows.append(row)
+            if verbose:
+                print(f"[{self.point_id}] Completed BM binning fit ({v}): mode={mode_val:.2f}, mode_bc={mode_bc:.2f}")
+
+        # Write HDF5 with all posterior samples
+        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
+        with h5py.File(temp_h5, "w") as h5f:
+            h5f.create_dataset(
+                "ndbd_samples",
+                data=np.array(all_ndbd_samples, dtype=float),
+                compression="gzip",
+                compression_opts=4,
+            )
+            h5f.create_dataset("max_logp", data=np.array(all_max_logp, dtype=float))
+            h5f.attrs["point_id"] = self.point_id
+            h5f.attrs["variants"] = _vars
+            h5f.attrs["category"] = "bm_binning"
+        temp_h5.replace(task_h5)
+
+        # Write CSV
+        df_res = pd.DataFrame(rows)
+        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
+        df_res.to_csv(temp_csv, index=False)
+        temp_csv.replace(task_csv)
+
+        if verbose:
+            print(f"[{self.point_id}] Saved {len(df_res)} BM binning fits: {task_csv} and {task_h5}")
+
+        return task_csv, task_h5
+
+    def check_syst_template_binning(
+        self,
+        study_dir: Union[str, Path],
+        bin_sizes: Optional[List[float]] = None,
+    ) -> Dict[str, Any]:
+        """Check completion status of template binning (bin_size) systematic fits."""
+        sdir = Path(study_dir)
+        _sizes = bin_sizes if bin_sizes is not None else [2.0]
+        target_n = len(_sizes)
+        task_csv = sdir / "tasks" / f"syst_bin_size_{self.point_id}.csv"
+        task_h5 = sdir / "tasks" / f"syst_bin_size_{self.point_id}_samples.h5"
+
+        is_done = False
+        row_count = 0
+        if task_csv.exists() and task_csv.stat().st_size > 0:
+            import pandas as pd
+            try:
+                df = pd.read_csv(task_csv)
+                row_count = len(df)
+                is_done = row_count >= target_n and task_h5.exists() and task_h5.stat().st_size > 0
+            except Exception:
+                pass
+
+        return {
+            "point_id": self.point_id,
+            "task_id": self.task_id,
+            "model_key": self.model_key,
+            "co_shift": self.co_shift,
+            "ndbd_shift": self.ndbd_shift,
+            "co_cut": self.co_cut,
+            "ndbd_cutoff": self.ndbd_cutoff,
+            "category": "bin_size",
+            "bin_sizes": _sizes,
+            "n_samples_target": target_n,
+            "n_samples_completed": row_count,
+            "is_completed": is_done,
+            "task_csv": str(task_csv),
+            "task_h5": str(task_h5),
+            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
+        }
+
+    def run_syst_template_binning(
+        self,
+        cfg: DictConfig,
+        study_dir: Union[str, Path],
+        bin_sizes: Optional[List[float]] = None,
+        seed: int = 42,
+        chains: int = 2,
+        draws: int = 2500,
+        tune: int = 500,
+        target_accept: float = 0.9,
+        single_core: bool = True,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        fit_fn: Optional[Any] = None,
+        save_traces: bool = False,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Tuple[Path, Path]:
+        """Execute template likelihood binning fits for coarser bin sizes (e.g. 2.0 or 5.0 keV)."""
+        import contextlib
+        import json
+        import math
+        import h5py
+        import numpy as np
+        import pandas as pd
+
+        _sizes = [float(b) for b in (bin_sizes if bin_sizes is not None else [2.0])]
+
+        sdir = Path(study_dir)
+        tasks_dir = sdir / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        task_csv = tasks_dir / f"syst_bin_size_{self.point_id}.csv"
+        task_h5 = tasks_dir / f"syst_bin_size_{self.point_id}_samples.h5"
+
+        if not force:
+            status = self.check_syst_template_binning(study_dir, bin_sizes=_sizes)
+            if status["is_completed"]:
+                if verbose:
+                    print(
+                        f"[{self.point_id}] Template binning fits already completed ({status['n_samples_completed']} sizes). Skipping."
+                    )
+                return task_csv, task_h5
+
+        from qpym2.storage.fits import (
+            setup_storage_fit,
+            assemble_fit_components,
+            resolve_storage_coords,
+            resolve_fit_template_uuids,
+        )
+        from qpym2.cfg.config_builders import get_comp_cfg, get_jags_path
+        from qpym2.utils import TempConfig
+
+        coords, hm_base, _, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
+        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
+
+        fit_setup = setup_storage_fit(
+            cfg=cfg,
+            model_key=self.model_key,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+            blinded=self.blinded,
+            prior_width="5sig",
+            mkchain_samples=100,
+            chains=chains,
+            draws=draws,
+            tune=tune,
+            target_accept=target_accept,
+            dry_run=False,
+        )
+
+        data = fit_setup["data"]
+        nominal_comps = fit_setup["fit_comps"]
+        nominal_priors = list(nominal_comps["prior"])
+
+        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
+            cfg=cfg,
+            model_key=self.model_key,
+            co_cut=self.co_cut,
+            ndbd_cutoff=self.ndbd_cutoff,
+            co_shift=self.co_shift,
+            ndbd_shift=self.ndbd_shift,
+        )
+
+        mctable, signal_df, _, _ = assemble_fit_components(
+            input_dir=input_dir,
+            jags_fpath=get_jags_path(cfg),
+            comp_cfg=comp_cfg_raw,
+            hm=hm_base,
+            uuid_base=uuid_base,
+            uuid_co=uuid_co,
+            uuid_ndbd=uuid_ndbd,
+        )
+
+        # Bias calibration resolution
+        popt = None
+        if isinstance(bias_calibration, dict):
+            calib = bias_calibration.get(self.point_id) or bias_calibration
+            if "a" in calib and "b" in calib:
+                popt = (float(calib["a"]), float(calib["b"]))
+        elif bias_calibration is not None:
+            cpath = Path(bias_calibration)
+            if not cpath.is_absolute():
+                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+                calib = calib_dict.get(self.point_id) or calib_dict
+                if "a" in calib and "b" in calib:
+                    popt = (float(calib["a"]), float(calib["b"]))
+
+        traces_dir = sdir / "traces"
+        if save_traces:
+            traces_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import pymc.sampling.parallel as _parallel
+            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
+        except Exception:
+            pass
+
+        from qpym2.models import m2
+        from qpym2.fit.bias import apply_bias_correction
+        from qpym2.fit.results import _get_stats
+        from qpym2.utils.hists import get_empty_hist
+        from qpym2.utils.mathy import get_mode
+        import pymc as pm
+
+        rows = []
+        all_ndbd_samples = []
+        all_max_logp = []
+
+        for idx, bs in enumerate(_sizes):
+            bs_seed = int(seed + self.task_id * 10000 + idx + 1)
+            np.random.seed(bs_seed)
+
+            # Build modified histogram model with new bin size
+            hm_bs = TempConfig(**{k: getattr(hm_base, k) for k in vars(hm_base)})
+            hm_bs.bin_size = bs
+            hm_bs.binsize = bs / math.sqrt(2)
+            _, xedges_bs, yedges_bs = get_empty_hist(hm_bs)
+
+            bkg_comps_bs = m2.make_bkgcomps_table(comp_cfg_raw, mctable, smooth=hm_base.smooth)
+            comps_bs = pd.concat([bkg_comps_bs, signal_df], join="inner")
+            comps_bs["prior"] = nominal_priors
+            comps_bs["varname"] = comps_bs.index
+
+            if fit_fn is not None:
+                trace = fit_fn(data, comps_bs, xedges_bs, yedges_bs)
+            else:
+                fik_bs = m2.make_fik(comps_bs, data, xedges_bs, yedges_bs)
+                model_bs = m2.m2_model(comps_bs, fik_bs)
+                with model_bs:
+                    trace = pm.sample(
+                        draws=draws,
+                        tune=tune,
+                        chains=chains,
+                        cores=1 if single_core else chains,
+                        return_inferencedata=True,
+                        target_accept=target_accept,
+                        progressbar=False,
+                        idata_kwargs={"log_likelihood": True},
+                        random_seed=bs_seed,
+                    )
+
+            if save_traces and hasattr(trace, "to_netcdf"):
+                trace_path = traces_dir / f"trace_bin_size_{bs:.1f}_{self.point_id}.nc"
+                trace.to_netcdf(str(trace_path))
+
+            ndbd_post = trace.posterior["ndbd"].values.flatten()
+            all_ndbd_samples.append(ndbd_post)
+
+            stats = _get_stats(ndbd_post)
+            mode_val = float(stats["mode"])
+            p16_val = float(stats["p16"])
+            p90_val = float(stats["p90"])
+
+            logp_val = 0.0
+            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
+                ll = trace.log_likelihood
+                if hasattr(ll, "pik"):
+                    arr = np.asarray(ll.pik.values).flatten()
+                elif isinstance(ll, dict) and "pik" in ll:
+                    arr = np.asarray(ll["pik"]).flatten()
+                else:
+                    arr = np.array([])
+                if len(arr) > 1:
+                    try:
+                        logp_val = float(get_mode(arr))
+                    except Exception:
+                        logp_val = float(np.median(arr))
+                elif len(arr) == 1:
+                    logp_val = float(arr[0])
+            all_max_logp.append(logp_val)
+
+            mode_bc = p16_bc = p90_bc = np.nan
+            if popt is not None:
+                corrected = apply_bias_correction(ndbd_post, popt)
+                mode_bc = float(get_mode(corrected))
+                p16_bc = float(np.percentile(corrected, 16))
+                p90_bc = float(np.percentile(corrected, 90))
+
+            row = {
+                "bin_size": bs,
+                "task_id": self.task_id,
+                "point_id": self.point_id,
+                "model_key": self.model_key,
+                "co_shift": self.co_shift,
+                "ndbd_shift": self.ndbd_shift,
+                "co_cut": str(self.co_cut),
+                "ndbd_cutoff": str(self.ndbd_cutoff),
+                "ndbd_mode": mode_val,
+                "ndbd_p16": p16_val,
+                "ndbd_p90": p90_val,
+                "max_logp": logp_val,
+                "ndbd_mode_bc": mode_bc,
+                "ndbd_p16_bc": p16_bc,
+                "ndbd_p90_bc": p90_bc,
+            }
+
+            for cname in comps_bs.index:
+                if cname != "ndbd" and cname in trace.posterior:
+                    c_post = trace.posterior[cname].values.flatten()
+                    row[f"{cname}_mode"] = float(get_mode(c_post))
+
+            rows.append(row)
+            if verbose:
+                print(f"[{self.point_id}] Completed template binning fit ({bs} keV): mode={mode_val:.2f}, mode_bc={mode_bc:.2f}")
+
+        # Write HDF5 with all posterior samples
+        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
+        with h5py.File(temp_h5, "w") as h5f:
+            h5f.create_dataset(
+                "ndbd_samples",
+                data=np.array(all_ndbd_samples, dtype=float),
+                compression="gzip",
+                compression_opts=4,
+            )
+            h5f.create_dataset("max_logp", data=np.array(all_max_logp, dtype=float))
+            h5f.attrs["point_id"] = self.point_id
+            h5f.attrs["bin_sizes"] = _sizes
+            h5f.attrs["category"] = "bin_size"
+        temp_h5.replace(task_h5)
+
+        # Write CSV
+        df_res = pd.DataFrame(rows)
+        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
+        df_res.to_csv(temp_csv, index=False)
+        temp_csv.replace(task_csv)
+
+        if verbose:
+            print(f"[{self.point_id}] Saved {len(df_res)} template binning fits: {task_csv} and {task_h5}")
+
+        return task_csv, task_h5
+

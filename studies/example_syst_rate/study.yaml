@@ -1,0 +1,61 @@
+study:
+  name: example_syst_rate
+  type: syst_rate
+  description: "Full systematic delta combination, smearing, and rate marginalisation"
+
+defaults:
+  environment: local
+  staging: default
+  analysis: base
+  models: tech_note
+  model_key: tech_note_200
+
+reference:
+  co_cut: gamma10_v150
+  ndbd_cutoff: u1740
+  co_shift: 1.0
+  ndbd_shift: 0.0
+  blinded: false
+
+bias_calibration: "studies/example_bias_study/bias_calibration.json"
+
+systematics:
+  lss_dq:
+    source: "studies/example_lss_dq_study"
+    delta_right: 4.74
+    delta_left: -3.59
+  lss_sscl:
+    source: "studies/example_lss_sscl_study"
+    delta_right: 1.20
+    delta_left: -1.20
+  bmmc:
+    source: "studies/example_bmmc_study"
+    delta_right: 0.50
+    delta_left: -1.50
+  bm_threshold:
+    source: "studies/example_bm_threshold_study"
+    delta_right: 0.00
+    delta_left: -1.16
+  bm_binning:
+    source: "studies/example_bm_binning_study"
+    delta_right: 0.00
+    delta_left: -0.60
+  ndbd_shift:
+    delta_right: 0.00
+    delta_left: -0.42
+  co_shift:
+    source: "studies/example_co_shift"
+    delta_right: 0.80
+    delta_left: -0.80
+  bias_corr:
+    delta_right: 0.30
+    delta_left: -0.04
+
+marginalisation:
+  exposure: 1038.4                  # kg*yr
+  eff_mc: 0.04                      # Signal selection efficiency
+  psa_mean: 0.99                    # PSA efficiency mean
+  psa_sig: 0.01                     # PSA efficiency sigma
+  n_smear: 200000                   # Split-Gaussian sample count
+  rng_seed: 42
+  extend_method: "skew_norm"

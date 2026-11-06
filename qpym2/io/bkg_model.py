@@ -130,3 +130,57 @@ def read_jagsh5(fpath: str) -> tuple:
     table.index.name = 'name'
 
     return table, mkchain
+
+
+def read_bm_variant_modes(
+    result_file: Union[str, Path],
+    fit_name: str,
+) -> pd.Series:
+    """Read component mode values for a specific BM fit variant from ResultsRaw.h5.
+
+    For Gaussian posteriors the mode (PDF_Mean) is used as the fit value;
+    for non-Gaussian posteriors (upper limits), the mode is set to 0.0.
+
+    Args:
+        result_file: Path to ResultsRaw.h5 file.
+        fit_name: Systematic variant name (e.g. 'Threshold250', 'MinBinSize_5_20').
+            Can be provided with or without the 'Posterior_Raw_' prefix.
+
+    Returns:
+        pd.Series: Modes indexed by MC component name (float values).
+    """
+    key = fit_name if fit_name.startswith('Posterior_Raw_') else f'Posterior_Raw_{fit_name}'
+    data_raw = pd.read_hdf(str(result_file), key=key)
+
+    if 'Mode' in data_raw.columns:
+        modes = data_raw['Mode'].values
+    elif 'IsGaus' in data_raw.columns and 'PDF_Mean' in data_raw.columns:
+        modes = np.where(data_raw['IsGaus'], data_raw['PDF_Mean'], 0.0)
+    elif 'PDF_Mean' in data_raw.columns:
+        modes = data_raw['PDF_Mean'].values
+    else:
+        raise ValueError(f"Cannot extract mode values from key '{key}' in {result_file}")
+
+    s = pd.Series(modes, index=data_raw['MC'].values, name='Mode', dtype=float)
+    s.index.name = 'MC'
+    return s
+
+
+def list_bm_variants(result_file: Union[str, Path]) -> list[str]:
+    """List all available BM systematic variants in ResultsRaw.h5.
+
+    Args:
+        result_file: Path to ResultsRaw.h5 file.
+
+    Returns:
+        list[str]: Sorted list of variant names (stripped of 'Posterior_Raw_' prefix).
+    """
+    import h5py
+
+    with h5py.File(str(result_file), 'r') as h5f:
+        variants = [
+            k[len('Posterior_Raw_'):]
+            for k in h5f.keys()
+            if k.startswith('Posterior_Raw_')
+        ]
+    return sorted(variants)

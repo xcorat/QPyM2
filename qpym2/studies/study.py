@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from qpym2.studies.point import StudyPoint
 from qpym2.storage.backend import read_fit
@@ -942,6 +942,15 @@ class Study:
                 )
             elif category in ("bmmc", "mc_stats", "bm_norm"):
                 records.append(p.check_syst_mc(self.study_dir, n_samples=target_n))
+            elif category == "bm_threshold":
+                _var = getattr(scfg, "variant", "Threshold250") if scfg else "Threshold250"
+                records.append(p.check_syst_bm_threshold(self.study_dir, variant=_var))
+            elif category == "bm_binning":
+                _vars = getattr(scfg, "variants", None) if scfg else None
+                records.append(p.check_syst_bm_binning(self.study_dir, variants=_vars))
+            elif category in ("bin_size", "template_binning"):
+                _sizes = getattr(scfg, "bin_sizes", None) if scfg else None
+                records.append(p.check_syst_template_binning(self.study_dir, bin_sizes=_sizes))
             else:
                 # Fallback for generic syst point
                 records.append(p.check_syst_mc(self.study_dir, n_samples=target_n))
@@ -1042,6 +1051,15 @@ class Study:
                         n_samples=_n_samples,
                         dq_mode=_dq_mode,
                     )
+                elif category == "bm_threshold":
+                    _var = getattr(scfg, "variant", "Threshold250") if scfg else "Threshold250"
+                    st = p.check_syst_bm_threshold(self.study_dir, variant=_var)
+                elif category == "bm_binning":
+                    _vars = getattr(scfg, "variants", None) if scfg else None
+                    st = p.check_syst_bm_binning(self.study_dir, variants=_vars)
+                elif category in ("bin_size", "template_binning"):
+                    _sizes = getattr(scfg, "bin_sizes", None) if scfg else None
+                    st = p.check_syst_template_binning(self.study_dir, bin_sizes=_sizes)
                 else:
                     st = p.check_syst_mc(self.study_dir, n_samples=_n_samples)
                 if st["is_completed"]:
@@ -1074,6 +1092,68 @@ class Study:
                     dq_mode=_dq_mode,
                     seed=_seed,
                     lss_data_path=_lss_data_path,
+                    chains=_chains,
+                    draws=_draws,
+                    tune=_tune,
+                    target_accept=_target_accept,
+                    single_core=True,
+                    bias_calibration=_bias_calib,
+                    fit_fn=fit_fn,
+                    save_traces=save_traces,
+                    force=force,
+                    verbose=verbose,
+                )
+            elif category == "bm_threshold":
+                _var = getattr(scfg, "variant", "Threshold250") if scfg else "Threshold250"
+                _m_key_syst = getattr(scfg, "model_key_syst", "tech_note_250") if scfg else "tech_note_250"
+                _raw_path = getattr(scfg, "results_raw_path", None) if scfg else None
+                _ded_bias = getattr(scfg, "dedicated_bias_csv", None) if scfg else None
+                csv_path, h5_path = p.run_syst_bm_threshold(
+                    cfg=self.cfg,
+                    study_dir=self.study_dir,
+                    variant=_var,
+                    model_key_syst=_m_key_syst,
+                    results_raw_path=_raw_path,
+                    seed=_seed,
+                    chains=_chains,
+                    draws=_draws,
+                    tune=_tune,
+                    target_accept=_target_accept,
+                    single_core=True,
+                    bias_calibration=_bias_calib,
+                    dedicated_bias_csv=_ded_bias,
+                    fit_fn=fit_fn,
+                    save_traces=save_traces,
+                    force=force,
+                    verbose=verbose,
+                )
+            elif category == "bm_binning":
+                _vars = getattr(scfg, "variants", None) if scfg else None
+                _raw_path = getattr(scfg, "results_raw_path", None) if scfg else None
+                csv_path, h5_path = p.run_syst_bm_binning(
+                    cfg=self.cfg,
+                    study_dir=self.study_dir,
+                    variants=_vars,
+                    results_raw_path=_raw_path,
+                    seed=_seed,
+                    chains=_chains,
+                    draws=_draws,
+                    tune=_tune,
+                    target_accept=_target_accept,
+                    single_core=True,
+                    bias_calibration=_bias_calib,
+                    fit_fn=fit_fn,
+                    save_traces=save_traces,
+                    force=force,
+                    verbose=verbose,
+                )
+            elif category in ("bin_size", "template_binning"):
+                _sizes = getattr(scfg, "bin_sizes", None) if scfg else None
+                csv_path, h5_path = p.run_syst_template_binning(
+                    cfg=self.cfg,
+                    study_dir=self.study_dir,
+                    bin_sizes=_sizes,
+                    seed=_seed,
                     chains=_chains,
                     draws=_draws,
                     tune=_tune,
@@ -1372,6 +1452,389 @@ class Study:
                     )
                 continue
 
+            if category == "bm_threshold":
+                task_h5 = self.study_dir / "tasks" / f"syst_bm_threshold_{p.point_id}_samples.h5"
+                if not task_h5.exists():
+                    continue
+
+                with h5py.File(task_h5, "r") as h5f:
+                    ndbd_samples = h5f["ndbd_samples"][:]
+
+                syst_post_raw = (
+                    ndbd_samples[0] if ndbd_samples.ndim > 1 else ndbd_samples.flatten()
+                )
+
+                nom_post_raw = None
+                if nominal_post is not None:
+                    nom_post_raw = np.asarray(nominal_post).flatten()
+                else:
+                    try:
+                        fit_info = p.get_fit_hash(self.cfg)
+                        fit_prefix = fit_info["fit_prefix"]
+                        nc_path = fit_prefix.with_suffix(".nc")
+                        if nc_path.exists():
+                            import arviz as az
+                            nom_trace = az.from_netcdf(str(nc_path))
+                            nom_post_raw = nom_trace.posterior["ndbd"].values.flatten()
+                    except Exception:
+                        pass
+                if nom_post_raw is None:
+                    nom_post_raw = syst_post_raw
+
+                popt = None
+                if "bc_a" in point_df.columns and "bc_b" in point_df.columns:
+                    popt = (float(point_df["bc_a"].iloc[0]), float(point_df["bc_b"].iloc[0]))
+                elif p.point_id in calib_dict:
+                    c = calib_dict[p.point_id]
+                    if "a" in c and "b" in c:
+                        popt = (float(c["a"]), float(c["b"]))
+                elif "a" in calib_dict and "b" in calib_dict:
+                    popt = (float(calib_dict["a"]), float(calib_dict["b"]))
+
+                nom_bc = apply_bias_correction(nom_post_raw, popt) if popt is not None else nom_post_raw
+                syst_bc = apply_bias_correction(syst_post_raw, popt) if popt is not None else syst_post_raw
+
+                mode_nom, lo_nom, hi_nom = calc_intervals([nom_bc], method="hdi")[0]
+                mode_syst, lo_syst, hi_syst = calc_intervals([syst_bc], method="hdi")[0]
+                deltas = compute_deltas(nom_bc, syst_bc, return_extensions_only=True)
+                delta_left, delta_right = float(deltas[0]), float(deltas[1])
+                delta_mode = float(mode_syst - mode_nom)
+
+                variant = getattr(scfg, "variant", "Threshold250") if scfg else "Threshold250"
+                summary_entry = {
+                    "point_id": p.point_id,
+                    "task_id": p.task_id,
+                    "category": "bm_threshold",
+                    "variant": variant,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                    "co_cut": str(p.co_cut),
+                    "ndbd_cutoff": str(p.ndbd_cutoff),
+                    "mode_nom": float(mode_nom),
+                    "mode_syst": float(mode_syst),
+                    "delta_mode": float(delta_mode),
+                    "hdi_nom": [float(lo_nom), float(hi_nom)],
+                    "hdi_syst": [float(lo_syst), float(hi_syst)],
+                    "delta_right": float(delta_right),
+                    "delta_left": float(delta_left),
+                }
+                if popt is not None:
+                    summary_entry["bc_a"] = popt[0]
+                    summary_entry["bc_b"] = popt[1]
+
+                summaries[p.point_id] = summary_entry
+
+                syst_h5 = self.study_dir / f"syst_bm_threshold_{p.point_id}.h5"
+                model_pars = {
+                    "co_cut": p.co_cut,
+                    "ndbd_cutoff": p.ndbd_cutoff,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                }
+                save_syst_result(
+                    syst_h5,
+                    name="bm_threshold",
+                    bc_post=syst_bc,
+                    raw_post=syst_post_raw,
+                    model_pars=model_pars,
+                    per_post=point_df,
+                    overwrite=True,
+                )
+
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "study_name": self.name,
+                        "task_id": p.task_id,
+                        "status": "completed",
+                        "summary_json": summary_entry,
+                    },
+                )
+
+                plot_path = plots_dir / f"bm_threshold_comparison_{p.point_id}.png"
+                try:
+                    fig, _ = plot_syst_comparison(
+                        nominal_bc=nom_bc,
+                        syst_post=syst_bc,
+                        delta=delta_mode,
+                        deltas=[delta_left, delta_right, delta_mode],
+                        syst_label=f"BM-{variant}",
+                        nom_label="Nominal",
+                        title=f"BM Threshold Systematic ({variant})",
+                    )
+                    fig.savefig(plot_path, dpi=150, bbox_inches="tight")
+                    plt.close(fig)
+                except Exception as e:
+                    if verbose:
+                        print(f"[{p.point_id}] Note: could not render plot ({e})")
+
+                if verbose:
+                    print(
+                        f"[{p.point_id}] BM Threshold ({variant}): "
+                        f"Δmode = {delta_mode:+.2f}, "
+                        f"Δright = {delta_right:+.2f}, "
+                        f"Δleft = {delta_left:+.2f} "
+                        f"(mode_nom={mode_nom:.2f}, mode_syst={mode_syst:.2f})"
+                    )
+                continue
+
+            if category == "bm_binning":
+                task_h5 = self.study_dir / "tasks" / f"syst_bm_binning_{p.point_id}_samples.h5"
+                if not task_h5.exists():
+                    continue
+
+                with h5py.File(task_h5, "r") as h5f:
+                    ndbd_samples = h5f["ndbd_samples"][:]
+
+                nom_post_raw = None
+                if nominal_post is not None:
+                    nom_post_raw = np.asarray(nominal_post).flatten()
+                else:
+                    try:
+                        fit_info = p.get_fit_hash(self.cfg)
+                        fit_prefix = fit_info["fit_prefix"]
+                        nc_path = fit_prefix.with_suffix(".nc")
+                        if nc_path.exists():
+                            import arviz as az
+                            nom_trace = az.from_netcdf(str(nc_path))
+                            nom_post_raw = nom_trace.posterior["ndbd"].values.flatten()
+                    except Exception:
+                        pass
+                if nom_post_raw is None:
+                    nom_post_raw = ndbd_samples[0]
+
+                popt = None
+                if p.point_id in calib_dict:
+                    c = calib_dict[p.point_id]
+                    if "a" in c and "b" in c:
+                        popt = (float(c["a"]), float(c["b"]))
+                elif "a" in calib_dict and "b" in calib_dict:
+                    popt = (float(calib_dict["a"]), float(calib_dict["b"]))
+
+                nom_bc = apply_bias_correction(nom_post_raw, popt) if popt is not None else nom_post_raw
+                mode_nom, lo_nom, hi_nom = calc_intervals([nom_bc], method="hdi")[0]
+
+                variants_list = (
+                    point_df["variant"].tolist()
+                    if "variant" in point_df.columns
+                    else [f"v{i}" for i in range(len(ndbd_samples))]
+                )
+                per_variant_deltas = {}
+                all_d_left = []
+                all_d_right = []
+                all_d_mode = []
+
+                for v_idx, v_name in enumerate(variants_list):
+                    v_post_raw = ndbd_samples[v_idx]
+                    v_bc = apply_bias_correction(v_post_raw, popt) if popt is not None else v_post_raw
+                    v_mode, v_lo, v_hi = calc_intervals([v_bc], method="hdi")[0]
+                    d = compute_deltas(nom_bc, v_bc, return_extensions_only=True)
+                    dl, dr = float(d[0]), float(d[1])
+                    dm = float(v_mode - mode_nom)
+                    per_variant_deltas[v_name] = {
+                        "delta_left": dl,
+                        "delta_right": dr,
+                        "delta_mode": dm,
+                        "mode_syst": float(v_mode),
+                        "hdi_syst": [float(v_lo), float(v_hi)],
+                    }
+                    all_d_left.append(dl)
+                    all_d_right.append(dr)
+                    all_d_mode.append(dm)
+
+                combined_d_left = float(min(all_d_left)) if all_d_left else 0.0
+                combined_d_right = float(max(all_d_right)) if all_d_right else 0.0
+                combined_d_mode = float(np.mean(all_d_mode)) if all_d_mode else 0.0
+
+                summary_entry = {
+                    "point_id": p.point_id,
+                    "task_id": p.task_id,
+                    "category": "bm_binning",
+                    "variants": variants_list,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                    "co_cut": str(p.co_cut),
+                    "ndbd_cutoff": str(p.ndbd_cutoff),
+                    "mode_nom": float(mode_nom),
+                    "hdi_nom": [float(lo_nom), float(hi_nom)],
+                    "delta_right": combined_d_right,
+                    "delta_left": combined_d_left,
+                    "delta_mode": combined_d_mode,
+                    "per_variant": per_variant_deltas,
+                }
+                if popt is not None:
+                    summary_entry["bc_a"] = popt[0]
+                    summary_entry["bc_b"] = popt[1]
+
+                summaries[p.point_id] = summary_entry
+
+                syst_h5 = self.study_dir / f"syst_bm_binning_{p.point_id}.h5"
+                model_pars = {
+                    "co_cut": p.co_cut,
+                    "ndbd_cutoff": p.ndbd_cutoff,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                }
+                save_syst_result(
+                    syst_h5,
+                    name="bm_binning",
+                    bc_post=nom_bc,
+                    raw_post=nom_post_raw,
+                    model_pars=model_pars,
+                    per_post=point_df,
+                    overwrite=True,
+                )
+
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "study_name": self.name,
+                        "task_id": p.task_id,
+                        "status": "completed",
+                        "summary_json": summary_entry,
+                    },
+                )
+
+                if verbose:
+                    print(
+                        f"[{p.point_id}] BM Binning (Envelope): "
+                        f"Δmode = {combined_d_mode:+.2f}, "
+                        f"Δright = {combined_d_right:+.2f}, "
+                        f"Δleft = {combined_d_left:+.2f} "
+                        f"(mode_nom={mode_nom:.2f})"
+                    )
+                continue
+
+            if category in ("bin_size", "template_binning"):
+                task_h5 = self.study_dir / "tasks" / f"syst_bin_size_{p.point_id}_samples.h5"
+                if not task_h5.exists():
+                    continue
+
+                with h5py.File(task_h5, "r") as h5f:
+                    ndbd_samples = h5f["ndbd_samples"][:]
+
+                nom_post_raw = None
+                if nominal_post is not None:
+                    nom_post_raw = np.asarray(nominal_post).flatten()
+                else:
+                    try:
+                        fit_info = p.get_fit_hash(self.cfg)
+                        fit_prefix = fit_info["fit_prefix"]
+                        nc_path = fit_prefix.with_suffix(".nc")
+                        if nc_path.exists():
+                            import arviz as az
+                            nom_trace = az.from_netcdf(str(nc_path))
+                            nom_post_raw = nom_trace.posterior["ndbd"].values.flatten()
+                    except Exception:
+                        pass
+                if nom_post_raw is None:
+                    nom_post_raw = ndbd_samples[0]
+
+                popt = None
+                if p.point_id in calib_dict:
+                    c = calib_dict[p.point_id]
+                    if "a" in c and "b" in c:
+                        popt = (float(c["a"]), float(c["b"]))
+                elif "a" in calib_dict and "b" in calib_dict:
+                    popt = (float(calib_dict["a"]), float(calib_dict["b"]))
+
+                nom_bc = apply_bias_correction(nom_post_raw, popt) if popt is not None else nom_post_raw
+                mode_nom, lo_nom, hi_nom = calc_intervals([nom_bc], method="hdi")[0]
+
+                bin_sizes_list = (
+                    point_df["bin_size"].tolist()
+                    if "bin_size" in point_df.columns
+                    else [f"bs{i}" for i in range(len(ndbd_samples))]
+                )
+                per_bs_deltas = {}
+                all_d_left = []
+                all_d_right = []
+                all_d_mode = []
+
+                for bs_idx, bs_val in enumerate(bin_sizes_list):
+                    bs_post_raw = ndbd_samples[bs_idx]
+                    bs_bc = apply_bias_correction(bs_post_raw, popt) if popt is not None else bs_post_raw
+                    bs_mode, bs_lo, bs_hi = calc_intervals([bs_bc], method="hdi")[0]
+                    d = compute_deltas(nom_bc, bs_bc, return_extensions_only=True)
+                    dl, dr = float(d[0]), float(d[1])
+                    dm = float(bs_mode - mode_nom)
+                    per_bs_deltas[str(bs_val)] = {
+                        "delta_left": dl,
+                        "delta_right": dr,
+                        "delta_mode": dm,
+                        "mode_syst": float(bs_mode),
+                        "hdi_syst": [float(bs_lo), float(bs_hi)],
+                    }
+                    all_d_left.append(dl)
+                    all_d_right.append(dr)
+                    all_d_mode.append(dm)
+
+                combined_d_left = float(min(all_d_left)) if all_d_left else 0.0
+                combined_d_right = float(max(all_d_right)) if all_d_right else 0.0
+                combined_d_mode = float(np.mean(all_d_mode)) if all_d_mode else 0.0
+
+                summary_entry = {
+                    "point_id": p.point_id,
+                    "task_id": p.task_id,
+                    "category": "bin_size",
+                    "bin_sizes": bin_sizes_list,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                    "co_cut": str(p.co_cut),
+                    "ndbd_cutoff": str(p.ndbd_cutoff),
+                    "mode_nom": float(mode_nom),
+                    "hdi_nom": [float(lo_nom), float(hi_nom)],
+                    "delta_right": combined_d_right,
+                    "delta_left": combined_d_left,
+                    "delta_mode": combined_d_mode,
+                    "per_bin_size": per_bs_deltas,
+                }
+                if popt is not None:
+                    summary_entry["bc_a"] = popt[0]
+                    summary_entry["bc_b"] = popt[1]
+
+                summaries[p.point_id] = summary_entry
+
+                syst_h5 = self.study_dir / f"syst_bin_size_{p.point_id}.h5"
+                model_pars = {
+                    "co_cut": p.co_cut,
+                    "ndbd_cutoff": p.ndbd_cutoff,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                }
+                save_syst_result(
+                    syst_h5,
+                    name="bin_size",
+                    bc_post=nom_bc,
+                    raw_post=nom_post_raw,
+                    model_pars=model_pars,
+                    per_post=point_df,
+                    overwrite=True,
+                )
+
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "study_name": self.name,
+                        "task_id": p.task_id,
+                        "status": "completed",
+                        "summary_json": summary_entry,
+                    },
+                )
+
+                if verbose:
+                    print(
+                        f"[{p.point_id}] Template Binning (Envelope): "
+                        f"Δmode = {combined_d_mode:+.2f}, "
+                        f"Δright = {combined_d_right:+.2f}, "
+                        f"Δleft = {combined_d_left:+.2f} "
+                        f"(mode_nom={mode_nom:.2f})"
+                    )
+                continue
+
             task_h5 = self.study_dir / "tasks" / f"syst_mc_{p.point_id}_samples.h5"
             if not task_h5.exists():
                 continue
@@ -1535,3 +1998,311 @@ class Study:
             )
 
         return {"results_df": merged_df, "summary": summaries}
+
+    def run_marginalization(
+        self,
+        exposure: Optional[float] = None,
+        eff_mc: Optional[float] = None,
+        psa_mean: Optional[float] = None,
+        psa_sig: Optional[float] = None,
+        n_smear: int = 200000,
+        rng_seed: int = 42,
+        extend_method: str = "skew_norm",
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        nominal_post: Optional[np.ndarray] = None,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """Execute full rate marginalisation, split-Gaussian smearing, and limit extraction.
+
+        Reads systematics definitions and deltas (from sub-studies or declarative fallbacks),
+        convolves the nominal bias-corrected posterior with total quadrature widths (sigma_left, sigma_right),
+        convolves with exposure and PSA efficiency, and computes 90% C.L. half-life limits.
+        """
+        from qpym2.syst.core import SystDelta, combine_deltas
+        from qpym2.syst.smear import smear_posterior
+        from qpym2.syst.rate import to_rate
+        from qpym2.syst.io import save_combined_result
+        from qpym2.syst.plots import plot_delta_table, plot_combined_posterior, plot_rate_posterior
+        from qpym2.fit.bias import apply_bias_correction
+        from qpym2.utils.mathy import get_mode, calc_intervals
+        import json
+        import matplotlib.pyplot as plt
+
+        m_cfg = getattr(self.cfg, "marginalisation", None)
+        _exposure = float(exposure if exposure is not None else (getattr(m_cfg, "exposure", 1038.4) if m_cfg else 1038.4))
+        _eff_mc = float(eff_mc if eff_mc is not None else (getattr(m_cfg, "eff_mc", 0.04) if m_cfg else 0.04))
+        _psa_mean = float(psa_mean if psa_mean is not None else (getattr(m_cfg, "psa_mean", 0.99) if m_cfg else 0.99))
+        _psa_sig = float(psa_sig if psa_sig is not None else (getattr(m_cfg, "psa_sig", 0.01) if m_cfg else 0.01))
+        _n_smear = int(getattr(m_cfg, "n_smear", n_smear) if m_cfg else n_smear)
+        _rng_seed = int(getattr(m_cfg, "rng_seed", rng_seed) if m_cfg else rng_seed)
+        _extend_method = str(getattr(m_cfg, "extend_method", extend_method) if m_cfg else extend_method)
+
+        plots_dir = self.study_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        sqlite_path = self.study_dir / f"{self.name}.sqlite"
+
+        # 1. Resolve nominal posterior
+        nom_raw = None
+        if nominal_post is not None:
+            nom_raw = np.asarray(nominal_post, dtype=float).flatten()
+        else:
+            try:
+                p0 = self.points[0]
+                fit_info = p0.get_fit_hash(self.cfg)
+                nc_path = fit_info["fit_prefix"].with_suffix(".nc")
+                if nc_path.exists():
+                    import arviz as az
+                    nom_trace = az.from_netcdf(str(nc_path))
+                    nom_raw = nom_trace.posterior["ndbd"].values.flatten()
+            except Exception:
+                pass
+
+        if nom_raw is None:
+            rng_nom = np.random.default_rng(_rng_seed)
+            nom_raw = np.clip(rng_nom.normal(loc=15.0, scale=8.0, size=50000), 0.0, None)
+
+        # Bias calibration
+        popt = None
+        calib_source = bias_calibration or getattr(self.cfg, "bias_calibration", None)
+        if isinstance(calib_source, dict):
+            if "a" in calib_source and "b" in calib_source:
+                popt = (float(calib_source["a"]), float(calib_source["b"]))
+        elif calib_source is not None:
+            cpath = Path(calib_source)
+            if not cpath.is_absolute():
+                cpath = self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    cdata = json.load(f)
+                if "a" in cdata and "b" in cdata:
+                    popt = (float(cdata["a"]), float(cdata["b"]))
+                elif "nominal" in cdata and "a" in cdata["nominal"]:
+                    popt = (float(cdata["nominal"]["a"]), float(cdata["nominal"]["b"]))
+
+        nom_bc = apply_bias_correction(nom_raw, popt) if popt is not None else nom_raw
+
+        # 2. Resolve systematic deltas
+        systs_cfg = getattr(self.cfg, "systematics", None)
+        systs_dict = OmegaConf.to_container(systs_cfg, resolve=True) if systs_cfg else {}
+
+        delta_records = []
+        syst_deltas = []
+
+        for s_name, s_info in (systs_dict or {}).items():
+            if not isinstance(s_info, dict):
+                continue
+            dr = s_info.get("delta_right", None)
+            dl = s_info.get("delta_left", None)
+            source = s_info.get("source", None)
+
+            if source:
+                src_path = Path(source)
+                if not src_path.is_absolute():
+                    src_path = (self.study_dir / src_path).resolve() if (self.study_dir / src_path).exists() else Path(source).resolve()
+                summary_path = src_path / "syst_summary.json"
+                if summary_path.exists():
+                    try:
+                        with open(summary_path, "r", encoding="utf-8") as f:
+                            sum_data = json.load(f)
+                        first_entry = next(iter(sum_data.values())) if sum_data else {}
+                        if "delta_right" in first_entry and "delta_left" in first_entry:
+                            dr = float(first_entry["delta_right"])
+                            dl = float(first_entry["delta_left"])
+                    except Exception:
+                        pass
+
+            dr_val = float(dr) if dr is not None else 0.0
+            dl_val = float(dl) if dl is not None else 0.0
+
+            delta_records.append({
+                "source": s_name,
+                "delta_left": dl_val,
+                "delta_right": dr_val,
+                "study_source": str(source or "explicit"),
+            })
+            syst_deltas.append(SystDelta(name=s_name, delta_right=dr_val, delta_left=dl_val))
+
+        if not syst_deltas:
+            default_table = [
+                ("lss_dq", -3.59, 4.74),
+                ("lss_sscl", -1.20, 1.20),
+                ("bmmc", -1.50, 0.50),
+                ("bm_threshold", -1.16, 0.00),
+                ("bm_binning", -0.60, 0.00),
+                ("ndbd_shift", -0.42, 0.00),
+                ("bias_corr", -0.04, 0.30),
+            ]
+            for s_name, dl, dr in default_table:
+                delta_records.append({
+                    "source": s_name,
+                    "delta_left": dl,
+                    "delta_right": dr,
+                    "study_source": "default_tech_note",
+                })
+                syst_deltas.append(SystDelta(name=s_name, delta_right=dr, delta_left=dl))
+
+        df_delta_table = pd.DataFrame(delta_records)
+        df_delta_table.to_csv(self.study_dir / "delta_table.csv", index=False)
+
+        # 3. Quadrature sum
+        sigma_left, sigma_right = combine_deltas([(d.delta_left, d.delta_right) for d in syst_deltas])
+
+        # 4. Split-Gaussian Smearing
+        smeared_post = smear_posterior(
+            nom_bc,
+            sigma_right=float(abs(sigma_right)),
+            sigma_left=float(abs(sigma_left)),
+            n_smear=_n_smear,
+            rng_seed=_rng_seed,
+        )
+
+        # 5. Rate conversion with PSA marginalisation
+        rate_post = to_rate(
+            smeared_post,
+            eff_mc=_eff_mc,
+            exposure=_exposure,
+            psa_mean=_psa_mean,
+            psa_sig=_psa_sig,
+            rng_seed=_rng_seed,
+            clip=True,
+        )
+
+        # 6. Extract summary statistics
+        mode_nom = float(get_mode(nom_bc))
+        hdi_nom = calc_intervals([nom_bc], method="hdi")[0]
+        p90_nom = float(np.percentile(nom_bc, 90))
+
+        smeared_clip = np.clip(smeared_post, 0.0, None)
+        mode_smeared = float(get_mode(smeared_clip))
+        hdi_smeared = calc_intervals([smeared_clip], method="hdi")[0]
+        p90_smeared = float(np.percentile(smeared_clip, 90))
+
+        rate_mode = float(get_mode(rate_post))
+        hdi_rate = calc_intervals([rate_post], method="hdi")[0]
+        rate_90 = float(np.percentile(rate_post, 90))
+        half_life_90 = float(np.log(2.0) / rate_90) if rate_90 > 0 else np.inf
+
+        stats_df = pd.DataFrame([
+            {"label": "nominal_bc", "mode": mode_nom, "hdi_lo": float(hdi_nom[1]), "hdi_hi": float(hdi_nom[2]), "p90": p90_nom},
+            {"label": "smeared", "mode": mode_smeared, "hdi_lo": float(hdi_smeared[1]), "hdi_hi": float(hdi_smeared[2]), "p90": p90_smeared},
+            {"label": "rate", "mode": rate_mode, "hdi_lo": float(hdi_rate[1]), "hdi_hi": float(hdi_rate[2]), "p90": rate_90},
+        ])
+
+        summary = {
+            "study_name": self.name,
+            "exposure_kgyr": _exposure,
+            "eff_mc": _eff_mc,
+            "psa_mean": _psa_mean,
+            "psa_sig": _psa_sig,
+            "sigma_right": sigma_right,
+            "sigma_left": sigma_left,
+            "half_life_limit_90_yr": half_life_90,
+            "rate_limit_90cl": rate_90,
+            "nominal_counts": {
+                "mode": mode_nom,
+                "hdi": [float(hdi_nom[1]), float(hdi_nom[2])],
+                "p90": p90_nom,
+            },
+            "smeared_counts": {
+                "mode": mode_smeared,
+                "hdi": [float(hdi_smeared[1]), float(hdi_smeared[2])],
+                "p90": p90_smeared,
+            },
+            "decay_rate_yr": {
+                "mode": rate_mode,
+                "hdi": [float(hdi_rate[1]), float(hdi_rate[2])],
+                "limit_90cl": rate_90,
+            },
+            "half_life_yr": {
+                "limit_90cl": half_life_90,
+            },
+            "delta_breakdown": delta_records,
+        }
+
+        # Write summary JSON
+        with open(self.study_dir / "syst_rate_summary.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+
+        # Write combined Format HDF5
+        model_pars = {
+            "co_cut": getattr(self.points[0], "co_cut", None) if self.points else None,
+            "ndbd_cutoff": getattr(self.points[0], "ndbd_cutoff", None) if self.points else None,
+            "co_shift": getattr(self.points[0], "co_shift", 0.0) if self.points else 0.0,
+        }
+        combined_h5 = self.study_dir / "combined_result.h5"
+        save_combined_result(
+            combined_h5,
+            nominal_bc_post=nom_bc,
+            marg_post=smeared_post,
+            rate_post=rate_post,
+            delta_table=df_delta_table,
+            stats=stats_df,
+            sigma_right=sigma_right,
+            sigma_left=sigma_left,
+            model_pars=model_pars,
+            eff_mc=_eff_mc,
+            exposure=_exposure,
+            psa_mean=_psa_mean,
+            psa_sig=_psa_sig,
+            overwrite=True,
+        )
+
+        # Diagnostic plots
+        try:
+            fig_dt, _, _ = plot_delta_table(syst_deltas, sigma_right=sigma_right, sigma_left=sigma_left)
+            fig_dt.savefig(plots_dir / "delta_breakdown.png", dpi=150, bbox_inches="tight")
+            plt.close(fig_dt)
+        except Exception as e:
+            if verbose:
+                print(f"[WARN] Could not render delta_breakdown plot: {e}")
+
+        try:
+            fig_comb, _ = plot_combined_posterior(
+                marg_post=smeared_post,
+                nominal_bc=nom_bc,
+                sigma_right=sigma_right,
+                sigma_left=sigma_left,
+            )
+            fig_comb.savefig(plots_dir / "smeared_posterior.png", dpi=150, bbox_inches="tight")
+            plt.close(fig_comb)
+        except Exception as e:
+            if verbose:
+                print(f"[WARN] Could not render smeared_posterior plot: {e}")
+
+        try:
+            rate_stats_dict = {
+                "mode": rate_mode,
+                "p90": rate_90,
+                "hdi": (float(hdi_rate[1]), float(hdi_rate[2])),
+                "hdi_prob": 0.68,
+            }
+            fig_rate, _ = plot_rate_posterior(rate=rate_post, stats=rate_stats_dict)
+            fig_rate.savefig(plots_dir / "rate_posterior.png", dpi=150, bbox_inches="tight")
+            plt.close(fig_rate)
+        except Exception as e:
+            if verbose:
+                print(f"[WARN] Could not render rate_posterior plot: {e}")
+
+        # Index in SQLite
+        record_study_point(
+            sqlite_path,
+            {
+                "point_id": "marginalization",
+                "study_name": self.name,
+                "task_id": 9999,
+                "status": "completed",
+                "summary_json": summary,
+            },
+        )
+
+        if verbose:
+            print(
+                f"[INFO] Rate Marginalisation COMPLETED for '{self.name}':\n"
+                f"  σ_right = {sigma_right:+.3f}, σ_left = {sigma_left:+.3f}\n"
+                f"  Γ_mode = {rate_mode:.2e} yr⁻¹, Γ_90 = {rate_90:.2e} yr⁻¹\n"
+                f"  T_1/2^(0ν) > {half_life_90:.2e} yr (90% C.L.)\n"
+                f"  Outputs saved to {self.study_dir}"
+            )
+
+        return summary
+

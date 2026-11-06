@@ -38,6 +38,7 @@ infrastructure:
     reduced_data: "Reduced_1ton.root"
     bkg_syst_corrmat: null
     lss_data_path: null
+    results_raw: null
 
   # File naming conventions (not paths; never resolved).
   naming_conventions:

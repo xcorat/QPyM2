@@ -398,6 +398,12 @@ def get_corrmat_path(cfg: DictConfig) -> Optional[str]:
     return resolve_data_path(cfg, getattr(cfg.infrastructure.data_files, 'bkg_syst_corrmat', None))
 
 
+def get_results_raw_path(cfg: DictConfig) -> Optional[str]:
+    """Extract raw background model results HDF5 path (ResultsRaw.h5) from Hydra config."""
+    val = getattr(cfg.infrastructure.data_files, 'results_raw', None)
+    return resolve_data_path(cfg, val) if val else None
+
+
 def get_fit_dir(cfg: DictConfig) -> str:
     """Extract fit directory from Hydra config."""
     return resolve_data_path(cfg, cfg.infrastructure.output_paths.fit_dir)
