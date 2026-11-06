@@ -22,7 +22,11 @@ dist/
 
 # Project outputs
 output/
+data
 data/
+studies/**
+!studies/**/
+!studies/**/study.yaml
 notebooks/*
 !notebooks/marimo/
 !notebooks/marimo/**
