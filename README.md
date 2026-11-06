@@ -18,20 +18,18 @@ raw ROOT ─► staging ROOT ─► input.h5 ─► fit.nc/.h5 ─► systematic
 
 ## Setup
 
-Create the conda environment and install the package:
+Activate the environment (managed via micromamba in `/data/cuore/conda`):
 
 ```bash
-mamba env create -f environment.yml
-conda activate xqpy
+source activate.sh
 ```
 
-See [`docs/setup.md`](docs/setup.md) for validation steps, and note that
-**PyROOT/ROOT**, **PyMC/PyTensor/ArviZ**, and PyTables (`tables`) are required.
+See [`docs/setup.md`](docs/setup.md) for details and validation steps.
 
 ## Quickstart
 
 ```bash
-conda activate xqpy
+source activate.sh
 
 # Generate a fit parameter grid
 python scripts/gen_params.py fit --environment m2v5-1 --analysis tech_note \

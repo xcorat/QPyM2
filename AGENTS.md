@@ -13,11 +13,8 @@ CLIs: stdlib `argparse`. HPC: NERSC Perlmutter via SLURM.
 
 ## Environment
 
-- Code runs inside the conda env defined by `environment.yml` (name `xqpy`).
-  SLURM scripts instead activate `/global/common/software/cuore/sachi/qpym2`
-  (env name `qpym2`). Be aware of this mismatch.
-- `python` is **not** guaranteed to be on `PATH` in a bare shell — activate the
-  env first. The package is installed editable (`pip install -e .`).
+- Activate the environment with `source activate.sh` (sets up micromamba under `/data/cuore/conda` and activates `qpym2`).
+- `python` is **not** guaranteed to be on `PATH` in a bare shell — run `source activate.sh` first. The package is installed editable (`pip install -e .`).
 - Hard requirements: **PyROOT/ROOT**, **PyMC >= 5.25 + PyTensor + ArviZ**,
   `pandas` (PyTables/`tables`), `h5py`, `netcdf4`, `matplotlib`, `scipy`.
   `tables` and `xarray` are imported by the code but are not declared in
@@ -54,7 +51,7 @@ scripts/gen_params.py ─► scripts/params/<type>_params.tsv ─► SLURM array
 
 ```bash
 # Activate env first
-conda activate xqpy
+source activate.sh
 
 # 1. Generate a parameter grid (writes scripts/params/<type>_params.tsv)
 python scripts/gen_params.py fit --environment m2v5-1 --analysis tech_note \
@@ -144,7 +141,7 @@ tree remain.
 ## Lint / format
 
 `pyproject.toml` configures ruff (conservative ruleset: `E4,E7,E9,F`). The
-`ruff` and `pytest` executables live in the `xqpy` conda env.
+`ruff` and `pytest` executables live in the `qpym2` conda env (available after `source activate.sh`).
 
 ```bash
 ruff check .
@@ -166,7 +163,8 @@ Canonical modules to prefer: `run_create_staging.py`, `run_create_input.py`,
 `run_single_fit.py`, `run_fits.py`, `io/hdf.py`, `io/rdf.py`,
 `io/staging.py`, `fit/create_m2uv.py`, `fit/params.py`, `fit/fit.py`,
 `models/m2.py`, `cfg/hydra_adapter.py`, `cfg/config_builders.py`,
-`storage/paths.py`, `storage/backend.py`, `storage/hasher.py`, `storage/inputs.py`, `storage/study.py`.
+`storage/paths.py`, `storage/backend.py`, `storage/hasher.py`, `storage/inputs.py`, `storage/study.py`,
+`studies/point.py`, `studies/study.py`, `studies/assembly.py`, `studies/toys.py`, `studies/syst_runner.py`, `studies/marginalize.py`.
 
 ## Repository state
 

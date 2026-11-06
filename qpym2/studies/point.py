@@ -1,5 +1,4 @@
-"""
-StudyPoint definition and input readiness routines for QPyM2 studies (v0.6).
+"""StudyPoint definition and input readiness routines for QPyM2 studies (v0.6).
 
 Represents a single concrete evaluation point in a parameter sweep or study.
 """
@@ -16,8 +15,7 @@ from qpym2.storage.paths import get_output_dir
 
 @dataclass
 class StudyPoint:
-    """
-    Representation of an individual parameter point within a study.
+    """Representation of an individual parameter point within a study.
 
     Attributes:
         point_id: Unique string label for this point (e.g. 'shift_0.8' or 'p0').
@@ -42,15 +40,7 @@ class StudyPoint:
     params: Dict[str, Any] = field(default_factory=dict)
 
     def get_required_inputs(self, cfg: DictConfig) -> Dict[str, Any]:
-        """
-        Inspect and resolve all required templates and data without modifying disk.
-
-        Args:
-            cfg: Merged Hydra configuration.
-
-        Returns:
-            Point manifest dictionary with expected paths, UUIDs, and cache flags.
-        """
+        """Inspect and resolve all required templates and data without modifying disk."""
         return create_storage_inputs_for_point(
             cfg=cfg,
             model_key=self.model_key,
@@ -63,20 +53,7 @@ class StudyPoint:
         )
 
     def check_inputs(self, cfg: DictConfig) -> Dict[str, Any]:
-        """
-        Check existence of all required inputs on disk.
-
-        Args:
-            cfg: Merged Hydra configuration.
-
-        Returns:
-            Dictionary with readiness metrics:
-            - point_id, task_id, model_key, co_shift, etc.
-            - total_templates, cached_templates, missing_templates
-            - missing_template_names, missing_template_paths
-            - data_path, data_cached
-            - is_ready (True if all templates and data exist)
-        """
+        """Check existence of all required inputs on disk."""
         manifest = self.get_required_inputs(cfg)
         templates = manifest.get("templates", {})
         data_info = manifest.get("data", {})
@@ -121,17 +98,7 @@ class StudyPoint:
         overwrite: bool = False,
         hist_cache: Optional[Dict[Any, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Materialize missing input templates and data on disk.
-
-        Args:
-            cfg: Merged Hydra configuration.
-            overwrite: If True, regenerate and overwrite existing files.
-            hist_cache: Optional shared in-memory histogram cache.
-
-        Returns:
-            Manifest dictionary returned by create_storage_inputs_for_point.
-        """
+        """Materialize missing input templates and data on disk."""
         return create_storage_inputs_for_point(
             cfg=cfg,
             model_key=self.model_key,
@@ -156,12 +123,7 @@ class StudyPoint:
         target_accept: float = 0.9,
         study_context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], str, Path, Path]:
-        """
-        Compute output UUID and target fit paths without performing MCMC sampling.
-
-        Returns:
-            Tuple of (fit_params_dict, output_uuid, fit_prefix, output_dir).
-        """
+        """Compute output UUID and target fit paths without performing MCMC sampling."""
         coords, hm, param_dir, _ = resolve_storage_coords(cfg, model_key=self.model_key)
         out_dir = get_output_dir(param_dir)
 
@@ -237,12 +199,7 @@ class StudyPoint:
         draws: int = 20000,
         tune: int = 1000,
     ) -> Dict[str, Any]:
-        """
-        Check if fit output files already exist on disk for this point.
-
-        Returns:
-            Dictionary with fit existence, output UUID, and output paths.
-        """
+        """Check if fit output files already exist on disk for this point."""
         _, output_uuid, fit_prefix, out_dir = self.get_fit_hash(
             cfg=cfg,
             prior_width=prior_width,
@@ -286,9 +243,7 @@ class StudyPoint:
         study_dir: Optional[Union[str, Path]] = None,
         verbose: bool = True,
     ) -> Dict[str, Any]:
-        """
-        Execute Bayesian fit for this study point.
-        """
+        """Execute Bayesian fit for this study point."""
         from qpym2.run.run_single_storage_fit import run_single_storage_fit
 
         return run_single_storage_fit(
@@ -312,41 +267,17 @@ class StudyPoint:
             verbose=verbose,
         )
 
+    # --- Modular Task Delegates ---
+
     def check_bias_toys(
         self,
         study_dir: Union[str, Path],
         n_toys: int = 200,
     ) -> Dict[str, Any]:
-        """
-        Check completion status of bias toy fits for this study point.
-        """
-        sdir = Path(study_dir)
-        task_csv = sdir / "tasks" / f"toys_bias_{self.point_id}.csv"
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
+        """Check completion status of bias toy fits for this study point."""
+        from qpym2.studies.toys import check_bias_toys
 
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= n_toys
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "n_toys_target": n_toys,
-            "n_toys_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_bias_toys(self, study_dir=study_dir, n_toys=n_toys)
 
     def run_bias_toys(
         self,
@@ -367,196 +298,38 @@ class StudyPoint:
         force: bool = False,
         verbose: bool = True,
     ) -> Path:
-        """
-        Execute a batch of bias toy fits for this study point.
+        """Execute a batch of bias toy fits for this study point."""
+        from qpym2.studies.toys import run_bias_toys
 
-        Loads precomputed templates via setup_storage_fit, generates pseudo-experiments
-        with uniformly distributed injected signal, fits each toy, and saves the task CSV.
-        """
-        import contextlib
-        import numpy as np
-        import pandas as pd
-
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"toys_bias_{self.point_id}.csv"
-
-        if not force:
-            status = self.check_bias_toys(study_dir, n_toys=n_toys)
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] Bias toys already completed ({status['n_toys_completed']} rows). Skipping."
-                    )
-                return task_csv
-
-        # Setup fit objects, templates, and edges from storage
-        from qpym2.storage.fits import setup_storage_fit
-
-        fit_setup = setup_storage_fit(
+        return run_bias_toys(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            prior_width=prior_width,
-            mkchain_samples=mkchain_samples,
+            study_dir=study_dir,
+            n_toys=n_toys,
+            bias_min=bias_min,
+            bias_max=bias_max,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            prior_width=prior_width,
+            mkchain_samples=mkchain_samples,
+            fit_fn=fit_fn,
+            force=force,
+            verbose=verbose,
         )
-
-        fit_comps = fit_setup["fit_comps"]
-        xedges, yedges = fit_setup["edges"]
-        component_names = list(fit_comps.index)
-        if "ndbd" not in component_names:
-            raise ValueError(f"Signal component 'ndbd' not found in components: {component_names}")
-        isig = component_names.index("ndbd")
-
-        rng = np.random.default_rng(seed + self.task_id * 10000)
-        injections = rng.uniform(bias_min, bias_max, size=n_toys)
-        base_norms = np.array(
-            [
-                float(fit_comps.loc[c, "integral"]) if "integral" in fit_comps.columns else 1.0
-                for c in component_names
-            ]
-        )
-
-        # Prevent fork deadlocks in PyMC parallel sampler if inside threaded runtime
-        try:
-            import pymc.sampling.parallel as _parallel
-
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.utils.hists import get_sum_hist, sample_hist
-        from qpym2.models import m2
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        rows = []
-        for i, inj in enumerate(injections):
-            norms = base_norms.copy()
-            norms[isig] = float(inj)
-            hsum = get_sum_hist(fit_comps, norms)
-            data_i = sample_hist(hsum, xedges, yedges)
-
-            if fit_fn is not None:
-                trace = fit_fn(data_i, fit_comps, xedges, yedges)
-            else:
-                fik = m2.make_fik(fit_comps, data_i, xedges, yedges)
-                model = m2.m2_model(fit_comps, fik)
-                with model:
-                    trace = pm.sample(
-                        draws=draws,
-                        tune=tune,
-                        chains=chains,
-                        cores=1 if single_core else chains,
-                        return_inferencedata=True,
-                        target_accept=target_accept,
-                        progressbar=False,
-                        idata_kwargs={"log_likelihood": True},
-                        random_seed=int(seed + self.task_id * 10000 + i + 1),
-                    )
-
-            ndbd_post = trace.posterior["ndbd"].values.flatten()
-            stats = _get_stats(ndbd_post)
-            mode_val = float(stats["mode"])
-            upp34_val = float(stats["upp34"])
-            uerr = upp34_val - mode_val
-            pull = (mode_val - float(inj)) / uerr if abs(uerr) > 1e-9 else 0.0
-
-            logp_val = 0.0
-            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-                ll = trace.log_likelihood
-                if hasattr(ll, "pik"):
-                    arr = np.asarray(ll.pik.values).flatten()
-                elif isinstance(ll, dict) and "pik" in ll:
-                    arr = np.asarray(ll["pik"]).flatten()
-                else:
-                    arr = np.array([])
-                if len(arr) > 1:
-                    logp_val = float(get_mode(arr))
-                elif len(arr) == 1:
-                    logp_val = float(arr[0])
-
-            row = {
-                "toy_id": i,
-                "task_id": self.task_id,
-                "point_id": self.point_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "type_": "bias",
-                "ndbd_inj_": float(inj),
-                "logp_mode_": logp_val,
-                "pull": float(pull),
-            }
-
-            for var in component_names:
-                var_post = trace.posterior[var].values.flatten()
-                v_stats = _get_stats(var_post)
-                for sname, sval in v_stats.items():
-                    row[f"{var}_{sname}"] = float(sval)
-
-            rows.append(row)
-            if verbose and ((i + 1) % 10 == 0 or (i + 1) == n_toys):
-                print(f"[{self.point_id}] Completed {i + 1}/{n_toys} bias toys", flush=True)
-
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved {len(df_res)} bias toys: {task_csv}")
-
-        return task_csv
 
     def check_sens_toys(
         self,
         study_dir: Union[str, Path],
         n_toys: int = 200,
     ) -> Dict[str, Any]:
-        """
-        Check completion status of sensitivity toy fits for this study point.
-        """
-        sdir = Path(study_dir)
-        task_csv = sdir / "tasks" / f"toys_sens_{self.point_id}.csv"
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
+        """Check completion status of sensitivity toy fits for this study point."""
+        from qpym2.studies.toys import check_sens_toys
 
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= n_toys
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "n_toys_target": n_toys,
-            "n_toys_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_sens_toys(self, study_dir=study_dir, n_toys=n_toys)
 
     def run_sens_toys(
         self,
@@ -575,204 +348,36 @@ class StudyPoint:
         force: bool = False,
         verbose: bool = True,
     ) -> Path:
-        """
-        Execute a batch of sensitivity toy fits (background-only hypothesis) for this study point.
+        """Execute a batch of sensitivity toy fits (background-only) for this study point."""
+        from qpym2.studies.toys import run_sens_toys
 
-        Loads precomputed templates via setup_storage_fit, generates pseudo-experiments
-        with zero signal injection (ndbd=0), fits each toy, and saves the task CSV.
-        """
-        import contextlib
-        import numpy as np
-        import pandas as pd
-
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"toys_sens_{self.point_id}.csv"
-
-        if not force:
-            status = self.check_sens_toys(study_dir, n_toys=n_toys)
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] Sensitivity toys already completed ({status['n_toys_completed']} rows). Skipping."
-                    )
-                return task_csv
-
-        # Setup fit objects, templates, and edges from storage
-        from qpym2.storage.fits import setup_storage_fit
-
-        fit_setup = setup_storage_fit(
+        return run_sens_toys(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            prior_width=prior_width,
-            mkchain_samples=mkchain_samples,
+            study_dir=study_dir,
+            n_toys=n_toys,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            prior_width=prior_width,
+            mkchain_samples=mkchain_samples,
+            fit_fn=fit_fn,
+            force=force,
+            verbose=verbose,
         )
-
-        fit_comps = fit_setup["fit_comps"]
-        xedges, yedges = fit_setup["edges"]
-        component_names = list(fit_comps.index)
-        if "ndbd" not in component_names:
-            raise ValueError(f"Signal component 'ndbd' not found in components: {component_names}")
-        isig = component_names.index("ndbd")
-
-        base_norms = np.array(
-            [
-                float(fit_comps.loc[c, "integral"]) if "integral" in fit_comps.columns else 1.0
-                for c in component_names
-            ]
-        )
-
-        # Enforce background-only hypothesis (zero signal)
-        norms = base_norms.copy()
-        norms[isig] = 0.0
-
-        # Prevent fork deadlocks in PyMC parallel sampler if inside threaded runtime
-        try:
-            import pymc.sampling.parallel as _parallel
-
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.utils.hists import get_sum_hist, sample_hist
-        from qpym2.models import m2
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        hsum = get_sum_hist(fit_comps, norms)
-
-        rows = []
-        for i in range(n_toys):
-            # Seed per toy for reproducibility
-            toy_seed = int(seed + self.task_id * 10000 + i + 1)
-            np.random.seed(toy_seed)
-
-            # Sample pseudo-data under H0
-            data_i = sample_hist(hsum, xedges, yedges)
-
-            if fit_fn is not None:
-                trace = fit_fn(data_i, fit_comps, xedges, yedges)
-            else:
-                fik = m2.make_fik(fit_comps, data_i, xedges, yedges)
-                model = m2.m2_model(fit_comps, fik)
-                with model:
-                    trace = pm.sample(
-                        draws=draws,
-                        tune=tune,
-                        chains=chains,
-                        cores=1 if single_core else chains,
-                        return_inferencedata=True,
-                        target_accept=target_accept,
-                        progressbar=False,
-                        idata_kwargs={"log_likelihood": True},
-                        random_seed=toy_seed,
-                    )
-
-            ndbd_post = trace.posterior["ndbd"].values.flatten()
-            stats = _get_stats(ndbd_post)
-            mode_val = float(stats["mode"])
-            upp34_val = float(stats["upp34"])
-            uerr = upp34_val - mode_val
-            pull = (mode_val - 0.0) / uerr if abs(uerr) > 1e-9 else 0.0
-
-            logp_val = 0.0
-            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-                ll = trace.log_likelihood
-                if hasattr(ll, "pik"):
-                    arr = np.asarray(ll.pik.values).flatten()
-                elif isinstance(ll, dict) and "pik" in ll:
-                    arr = np.asarray(ll["pik"]).flatten()
-                else:
-                    arr = np.array([])
-                if len(arr) > 1:
-                    logp_val = float(get_mode(arr))
-                elif len(arr) == 1:
-                    logp_val = float(arr[0])
-
-            row = {
-                "toy_id": i,
-                "task_id": self.task_id,
-                "point_id": self.point_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "type_": "sens",
-                "ndbd_inj_": 0.0,
-                "logp_mode_": logp_val,
-                "pull": float(pull),
-            }
-
-            for var in component_names:
-                var_post = trace.posterior[var].values.flatten()
-                v_stats = _get_stats(var_post)
-                for sname, sval in v_stats.items():
-                    row[f"{var}_{sname}"] = float(sval)
-
-            rows.append(row)
-            if verbose and ((i + 1) % 10 == 0 or (i + 1) == n_toys):
-                print(f"[{self.point_id}] Completed {i + 1}/{n_toys} sensitivity toys", flush=True)
-
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved {len(df_res)} sensitivity toys: {task_csv}")
-
-        return task_csv
 
     def check_syst_mc(
         self,
         study_dir: Union[str, Path],
         n_samples: int = 100,
     ) -> Dict[str, Any]:
-        """
-        Check completion status of MC-stats (bmmc) systematic fits for this study point.
-        """
-        sdir = Path(study_dir)
-        task_csv = sdir / "tasks" / f"syst_mc_{self.point_id}.csv"
-        task_h5 = sdir / "tasks" / f"syst_mc_{self.point_id}_samples.h5"
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
+        """Check completion status of MC-stats (bmmc) systematic fits for this study point."""
+        from qpym2.studies.syst_mc import check_syst_mc
 
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= n_samples and task_h5.exists() and task_h5.stat().st_size > 0
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "n_samples_target": n_samples,
-            "n_samples_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "task_h5": str(task_h5),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_syst_mc(self, study_dir=study_dir, n_samples=n_samples)
 
     def run_syst_mc(
         self,
@@ -792,275 +397,27 @@ class StudyPoint:
         force: bool = False,
         verbose: bool = True,
     ) -> Tuple[Path, Path]:
-        """
-        Execute a batch of MC-stats (bmmc) systematic fits for this study point.
+        """Execute a batch of MC-stats (bmmc) systematic fits for this study point."""
+        from qpym2.studies.syst_mc import run_syst_mc
 
-        Perturbs background source normalisation vectors according to the background
-        model covariance matrix (or draws unperturbed raw chain if stat_only=True),
-        refits the observed data for each sample, and records summary metrics and
-        ndbd posterior samples.
-        """
-        import contextlib
-        import json
-        import h5py
-        import numpy as np
-        import pandas as pd
-
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"syst_mc_{self.point_id}.csv"
-        task_h5 = tasks_dir / f"syst_mc_{self.point_id}_samples.h5"
-
-        if not force:
-            status = self.check_syst_mc(study_dir, n_samples=n_samples)
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] MC-stats systematic fits already completed ({status['n_samples_completed']} rows). Skipping."
-                    )
-                return task_csv, task_h5
-
-        # 1. Resolve storage inputs, templates, data, and nominal fit components
-        from qpym2.storage.fits import (
-            setup_storage_fit,
-            assemble_fit_components,
-            resolve_storage_coords,
-            resolve_fit_template_uuids,
-        )
-        from qpym2.cfg.config_builders import get_comp_cfg, get_jags_path, get_corrmat_path
-        from qpym2.io.bkg_model import get_mcsyst_samples
-
-        coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
-        jags_fpath = get_jags_path(cfg)
-        corrmat_fpath = get_corrmat_path(cfg) if not stat_only else None
-        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
-
-        # Run storage fit setup to resolve nominal components, priors, and observed data
-        fit_setup = setup_storage_fit(
+        return run_syst_mc(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            blinded=self.blinded,
-            prior_width="5sig",
-            mkchain_samples=100,
+            study_dir=study_dir,
+            n_samples=n_samples,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
-        )
-
-        data = fit_setup["data"]
-        xedges, yedges = fit_setup["edges"]
-        nominal_comps = fit_setup["fit_comps"]
-        nominal_priors = list(nominal_comps["prior"])
-
-        # Also get mctable with individual background sources for normalization variation
-        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
-            cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-        )
-
-        mctable, signal_df, _, _ = assemble_fit_components(
-            input_dir=input_dir,
-            jags_fpath=jags_fpath,
-            comp_cfg=comp_cfg_raw,
-            hm=hm,
-            uuid_base=uuid_base,
-            uuid_co=uuid_co,
-            uuid_ndbd=uuid_ndbd,
-        )
-
-        # 2. Draw n_samples perturbed background normalisation vectors
-        if verbose:
-            mode_str = "stat-only" if stat_only else "covariance-perturbed"
-            print(
-                f"[{self.point_id}] Generating {n_samples} {mode_str} normalisation vectors (seed={seed})..."
-            )
-
-        mc_samples = get_mcsyst_samples(
-            chain=jags_fpath,
-            corrmat_fpath=corrmat_fpath,
-            n=n_samples,
-            seed=seed,
             stat_only=stat_only,
+            single_core=single_core,
+            bias_calibration=bias_calibration,
+            fit_fn=fit_fn,
+            save_traces=save_traces,
+            force=force,
+            verbose=verbose,
         )
-
-        # 3. Resolve bias calibration if provided
-        popt = None
-        if isinstance(bias_calibration, dict):
-            calib = bias_calibration.get(self.point_id) or bias_calibration
-            if "a" in calib and "b" in calib:
-                popt = (float(calib["a"]), float(calib["b"]))
-        elif bias_calibration is not None:
-            cpath = Path(bias_calibration)
-            if not cpath.is_absolute():
-                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
-            if cpath.exists():
-                with open(cpath, "r", encoding="utf-8") as f:
-                    calib_dict = json.load(f)
-                calib = calib_dict.get(self.point_id) or calib_dict
-                if "a" in calib and "b" in calib:
-                    popt = (float(calib["a"]), float(calib["b"]))
-
-        # Optional trace saving directory
-        traces_dir = sdir / "traces"
-        if save_traces:
-            traces_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            import pymc.sampling.parallel as _parallel
-
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.models import m2
-        from qpym2.fit.bias import apply_bias_correction
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        rows = []
-        all_ndbd_samples = []
-        all_max_logp = []
-
-        for i in range(n_samples):
-            # Seed per sample
-            sample_seed = int(seed + self.task_id * 10000 + i + 1)
-            np.random.seed(sample_seed)
-
-            # Update mctable with sample normalisation
-            mt_i = mctable.copy()
-            mt_i["norm"] = pd.Series(mc_samples.iloc[i].to_dict()).reindex(mt_i.index)
-
-            # Rebuild grouped background components with perturbed norms
-            bkg_comps_i = m2.make_bkgcomps_table(comp_cfg_raw, mt_i, smooth=hm.smooth)
-            comps_i = pd.concat([bkg_comps_i, signal_df], join="inner")
-            comps_i["prior"] = nominal_priors
-            comps_i["varname"] = comps_i.index
-
-            if fit_fn is not None:
-                trace = fit_fn(data, comps_i, xedges, yedges)
-            else:
-                fik_i = m2.make_fik(comps_i, data, xedges, yedges)
-                model_i = m2.m2_model(comps_i, fik_i)
-                with model_i:
-                    trace = pm.sample(
-                        draws=draws,
-                        tune=tune,
-                        chains=chains,
-                        cores=1 if single_core else chains,
-                        return_inferencedata=True,
-                        target_accept=target_accept,
-                        progressbar=False,
-                        idata_kwargs={"log_likelihood": True},
-                        random_seed=sample_seed,
-                    )
-
-            if save_traces and hasattr(trace, "to_netcdf"):
-                trace_path = traces_dir / f"trace_mc_{self.point_id}_s{i:04d}.nc"
-                trace.to_netcdf(str(trace_path))
-
-            ndbd_post = trace.posterior["ndbd"].values.flatten()
-            all_ndbd_samples.append(ndbd_post)
-
-            stats = _get_stats(ndbd_post)
-            mode_val = float(stats["mode"])
-            p16_val = float(stats["p16"])
-            p90_val = float(stats["p90"])
-
-            # Log-likelihood mode score
-            logp_val = 0.0
-            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-                ll = trace.log_likelihood
-                if hasattr(ll, "pik"):
-                    arr = np.asarray(ll.pik.values).flatten()
-                elif isinstance(ll, dict) and "pik" in ll:
-                    arr = np.asarray(ll["pik"]).flatten()
-                else:
-                    arr = np.array([])
-                if len(arr) > 1:
-                    try:
-                        logp_val = float(get_mode(arr))
-                    except Exception:
-                        logp_val = float(np.median(arr))
-                elif len(arr) == 1:
-                    logp_val = float(arr[0])
-            all_max_logp.append(logp_val)
-
-            mode_bc = p16_bc = p90_bc = np.nan
-            if popt is not None:
-                corrected = apply_bias_correction(ndbd_post, popt)
-                mode_bc = float(get_mode(corrected))
-                p16_bc = float(np.percentile(corrected, 16))
-                p90_bc = float(np.percentile(corrected, 90))
-
-            row = {
-                "sample_idx": i,
-                "task_id": self.task_id,
-                "point_id": self.point_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "stat_only": stat_only,
-                "ndbd_mode": mode_val,
-                "ndbd_p16": p16_val,
-                "ndbd_p90": p90_val,
-                "max_logp": logp_val,
-                "ndbd_mode_bc": mode_bc,
-                "ndbd_p16_bc": p16_bc,
-                "ndbd_p90_bc": p90_bc,
-            }
-
-            # Also record mode for background components
-            for cname in comps_i.index:
-                if cname != "ndbd" and cname in trace.posterior:
-                    c_post = trace.posterior[cname].values.flatten()
-                    row[f"{cname}_mode"] = float(get_mode(c_post))
-
-            rows.append(row)
-            if verbose and ((i + 1) % 10 == 0 or (i + 1) == n_samples):
-                print(
-                    f"[{self.point_id}] Completed {i + 1}/{n_samples} MC-stats systematic fits",
-                    flush=True,
-                )
-
-        # Write HDF5 with all posterior samples
-        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
-        with h5py.File(temp_h5, "w") as h5f:
-            h5f.create_dataset(
-                "ndbd_samples",
-                data=np.array(all_ndbd_samples, dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            h5f.create_dataset("max_logp", data=np.array(all_max_logp, dtype=float))
-            h5f.attrs["point_id"] = self.point_id
-            h5f.attrs["n_samples"] = n_samples
-            h5f.attrs["stat_only"] = stat_only
-        temp_h5.replace(task_h5)
-
-        # Write CSV
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved {len(df_res)} MC-stats fits: {task_csv} and {task_h5}")
-
-        return task_csv, task_h5
 
     def check_syst_lss(
         self,
@@ -1070,50 +427,17 @@ class StudyPoint:
         n_samples: Optional[int] = None,
         dq_mode: str = "pm1",
     ) -> Dict[str, Any]:
-        """
-        Check completion status of Lineshape Systematic (LSS: sscl or dq) fits for this study point.
-        """
-        sdir = Path(study_dir)
-        cat_norm = "lss_dq" if category in ("dq", "lss_dq") else "lss_sscl"
-        task_csv = sdir / "tasks" / f"syst_{cat_norm}_{self.point_id}.csv"
-        task_h5 = sdir / "tasks" / f"syst_{cat_norm}_{self.point_id}_samples.h5"
+        """Check completion status of Lineshape Systematic (LSS: sscl or dq) fits for this point."""
+        from qpym2.studies.syst_lss import check_syst_lss
 
-        _ds = datasets if datasets is not None else list(range(3601, 3616))
-        if cat_norm == "lss_sscl":
-            target_n = len(_ds)
-        elif dq_mode == "pm1":
-            target_n = 2 * len(_ds)
-        else:
-            target_n = (n_samples or 100) * len(_ds)
-
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
-
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= target_n
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "category": cat_norm,
-            "n_samples_target": target_n,
-            "n_samples_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "task_h5": str(task_h5),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_syst_lss(
+            point=self,
+            study_dir=study_dir,
+            category=category,
+            datasets=datasets,
+            n_samples=n_samples,
+            dq_mode=dq_mode,
+        )
 
     def run_syst_lss(
         self,
@@ -1121,8 +445,11 @@ class StudyPoint:
         study_dir: Union[str, Path],
         category: str = "lss_sscl",
         datasets: Optional[List[int]] = None,
-        n_samples: Optional[int] = None,
         dq_mode: str = "pm1",
+        n_samples: Optional[int] = None,
+        lss_data_path: Optional[Union[str, Path]] = None,
+        lss_params: Optional[Dict[str, Any]] = None,
+        evdata: Optional[Dict[str, Any]] = None,
         seed: int = 42,
         chains: int = 2,
         draws: int = 2500,
@@ -1131,359 +458,36 @@ class StudyPoint:
         single_core: bool = True,
         bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
         fit_fn: Optional[Any] = None,
-        evdata: Optional[Dict[str, Any]] = None,
-        lss_params: Optional[Dict[str, Any]] = None,
-        lss_data_path: Optional[str] = None,
         save_traces: bool = False,
         force: bool = False,
         verbose: bool = True,
     ) -> Tuple[Path, Path]:
-        """
-        Execute Lineshape Systematic (LSS: sscl or dq) fits across datasets for this study point.
-        """
-        import contextlib
-        import json
-        import h5py
-        import numpy as np
-        import pandas as pd
+        """Execute Lineshape Systematic (LSS: SSCL or dQ) fits for this study point."""
+        from qpym2.studies.syst_lss import run_syst_lss
 
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-
-        cat_norm = "lss_dq" if category in ("dq", "lss_dq") else "lss_sscl"
-        task_csv = tasks_dir / f"syst_{cat_norm}_{self.point_id}.csv"
-        task_h5 = tasks_dir / f"syst_{cat_norm}_{self.point_id}_samples.h5"
-
-        _ds_list = datasets if datasets is not None else list(range(3601, 3616))
-
-        if not force:
-            status = self.check_syst_lss(
-                study_dir=study_dir,
-                category=cat_norm,
-                datasets=_ds_list,
-                n_samples=n_samples,
-                dq_mode=dq_mode,
-            )
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] LSS systematic fits ({cat_norm}) already completed ({status['n_samples_completed']} rows). Skipping."
-                    )
-                return task_csv, task_h5
-
-        # 1. Nominal storage setup (data, components, priors, edges)
-        from qpym2.storage.fits import setup_storage_fit, resolve_storage_coords
-        from qpym2.cfg.config_builders import get_comp_cfg
-
-        coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
-        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
-
-        fit_setup = setup_storage_fit(
+        return run_syst_lss(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            blinded=self.blinded,
-            prior_width="5sig",
+            study_dir=study_dir,
+            category=category,
+            datasets=datasets,
+            dq_mode=dq_mode,
+            n_samples=n_samples,
+            lss_data_path=lss_data_path,
+            lss_params=lss_params,
+            evdata=evdata,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            bias_calibration=bias_calibration,
+            fit_fn=fit_fn,
+            save_traces=save_traces,
+            force=force,
+            verbose=verbose,
         )
-
-        data = fit_setup["data"]
-        nominal_comps = fit_setup["fit_comps"]
-        nominal_priors = list(nominal_comps["prior"])
-
-        # 2. Resolve LSS parameters
-        if lss_params is None:
-            from qpym2.io.qls_scaling import load_lss_params
-
-            resolved_lss_path = lss_data_path
-            if not resolved_lss_path and hasattr(cfg, "syst"):
-                resolved_lss_path = getattr(cfg.syst, "lss_data_path", None)
-            lss_params = load_lss_params(cfg, n_ds=len(_ds_list), lss_data_path=resolved_lss_path)
-
-        ds_start = _ds_list[0]
-
-        # 3. Resolve staged event data
-        if evdata is None:
-            from qpym2.cfg.config_builders import get_jags_path, build_input_config
-            from qpym2.io.bkg_model import read_jagsh5
-            from qpym2.fit.create_evtrees import create_evtrees
-            import gc
-
-            jags_fpath = get_jags_path(cfg)
-            input_cfg = build_input_config(cfg, model_key=self.model_key)
-            mcfit_table, _ = read_jagsh5(jags_fpath)
-            comp_fnames = dict(zip(mcfit_table.index, mcfit_table.fname))
-            comp_fnames["ndbd"] = "ndbd.root"
-            evtrees = create_evtrees(input_cfg, comp_fnames)
-
-            _NP_COLS = ["u0", "v0", "ch1", "ch2", "ds"]
-            evdata = {}
-            for comp, rdf in evtrees.items():
-                if rdf is None:
-                    evdata[comp] = None
-                else:
-                    evdata[comp] = {
-                        c: np.array(a) for c, a in rdf.AsNumpy(columns=_NP_COLS).items()
-                    }
-            del evtrees
-            gc.collect()
-
-        # Build mcfit_table for histogramming
-        from qpym2.fit.syst_lss import (
-            build_sscl_mctable,
-            build_dq_mctable,
-            run_lss_fit,
-            extract_posterior_stats,
-        )
-        from qpym2.fit.bias import apply_bias_correction
-        from qpym2.utils.mathy import get_mode
-        from qpym2.fit.params import model_cfg
-
-        mcfg = model_cfg(
-            hist_model=hm,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            co_cuts_dict=dict(getattr(cfg.cuts, "co_cuts", {})) if hasattr(cfg, "cuts") else None,
-            ndbd_cuts_dict=dict(getattr(cfg.cuts, "ndbd_cutoff", {}))
-            if hasattr(cfg, "cuts")
-            else None,
-        )
-        cuts = mcfg.get("cuts", {})
-        cuts_mc = [f for f in [cuts.get("common"), cuts.get("mc_only")] if f]
-        cuts_ndbd = [f for f in [cuts.get("common"), cuts.get("ndbd_only")] if f]
-
-        # Background fit table for templates
-        from qpym2.storage.fits import assemble_fit_components, resolve_fit_template_uuids
-
-        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
-            cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-        )
-        from qpym2.cfg.config_builders import get_jags_path
-
-        jags_fpath = get_jags_path(cfg)
-        mctable, _, _, _ = assemble_fit_components(
-            input_dir=input_dir,
-            jags_fpath=jags_fpath,
-            comp_cfg=comp_cfg_raw,
-            hm=hm,
-            uuid_base=uuid_base,
-            uuid_co=uuid_co,
-            uuid_ndbd=uuid_ndbd,
-        )
-
-        # 4. Bias calibration
-        popt = None
-        if isinstance(bias_calibration, dict):
-            calib = bias_calibration.get(self.point_id) or bias_calibration
-            if "a" in calib and "b" in calib:
-                popt = (float(calib["a"]), float(calib["b"]))
-        elif bias_calibration is not None:
-            cpath = Path(bias_calibration)
-            if not cpath.is_absolute():
-                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
-            if cpath.exists():
-                with open(cpath, "r", encoding="utf-8") as f:
-                    calib_dict = json.load(f)
-                calib = calib_dict.get(self.point_id) or calib_dict
-                if "a" in calib and "b" in calib:
-                    popt = (float(calib["a"]), float(calib["b"]))
-
-        # Optional trace saving directory
-        traces_dir = sdir / "traces"
-        if save_traces:
-            traces_dir.mkdir(parents=True, exist_ok=True)
-
-        # Prevent fork deadlocks in PyMC parallel sampler if inside threaded runtime
-        try:
-            import pymc.sampling.parallel as _parallel
-
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        # 5. Build fit jobs list: (ds, variant_name, transform_args)
-        jobs = []
-        if cat_norm == "lss_sscl":
-            for ds in _ds_list:
-                ids = (
-                    ds - ds_start
-                    if (ds - ds_start) < len(lss_params["delta_p1_1r"])
-                    else _ds_list.index(ds)
-                )
-                ch_sigma0 = lss_params["sigma0_2d"][ids]
-                delta_p1 = lss_params["delta_p1_1r"][ids]
-                jobs.append((ds, "sscale_1r", {"ch_sigma0": ch_sigma0, "delta_p1": delta_p1}))
-        elif dq_mode == "pm1":
-            for ds in _ds_list:
-                ids = (
-                    ds - ds_start
-                    if (ds - ds_start) < len(lss_params["q_pars_arr"])
-                    else _ds_list.index(ds)
-                )
-                q_mean = lss_params["q_pars_arr"][ids]
-                q_1r = lss_params["q_pars_sample_1r"][ids]
-                q_1l = lss_params["q_pars_sample_1l"][ids]
-                jobs.append((ds, "dqres_1r", {"q_pars_mean": q_mean, "q_pars_sample": q_1r}))
-                jobs.append((ds, "dqres_1l", {"q_pars_mean": q_mean, "q_pars_sample": q_1l}))
-        else:
-            # Random parameter draws
-            from qpym2.io.qls_scaling import sample_dq_random
-
-            n_dq = n_samples or 100
-            dq_random_samples = sample_dq_random(cfg, n_samples=n_dq, seed=seed)
-            for si in range(n_dq):
-                sname = f"dq_r{si:04d}"
-                qps = dq_random_samples[si]
-                for ds in _ds_list:
-                    ids = (
-                        ds - ds_start
-                        if (ds - ds_start) < len(lss_params["q_pars_arr"])
-                        else _ds_list.index(ds)
-                    )
-                    q_mean = lss_params["q_pars_arr"][ids]
-                    jobs.append((ds, sname, {"q_pars_mean": q_mean, "q_pars_sample": qps[ids]}))
-
-        if verbose:
-            print(
-                f"[{self.point_id}] Running {len(jobs)} {cat_norm} fits across {len(_ds_list)} datasets..."
-            )
-
-        rows = []
-        all_ndbd_samples = []
-
-        for idx, (ds, variant, par_dict) in enumerate(jobs):
-            fit_seed = int(seed + self.task_id * 10000 + idx + 1)
-            rng = np.random.default_rng(fit_seed)
-
-            # Build perturbed mctable
-            if cat_norm == "lss_sscl":
-                mt_ds, sig_ds = build_sscl_mctable(
-                    mc_events_dict=evdata,
-                    mcfit_table=mctable,
-                    hm=hm,
-                    target_ds=ds,
-                    ch_sigma0=par_dict["ch_sigma0"],
-                    delta_p1=par_dict["delta_p1"],
-                    cuts_mc=cuts_mc,
-                    cuts_ndbd=cuts_ndbd,
-                    rng=rng,
-                )
-            else:
-                mt_ds, sig_ds = build_dq_mctable(
-                    mc_events_dict=evdata,
-                    mcfit_table=mctable,
-                    hm=hm,
-                    target_ds=ds,
-                    q_pars_mean=par_dict["q_pars_mean"],
-                    q_pars_sample=par_dict["q_pars_sample"],
-                    cuts_mc=cuts_mc,
-                    cuts_ndbd=cuts_ndbd,
-                )
-
-            # Fit
-            if fit_fn is not None:
-                trace = fit_fn(mt_ds, sig_ds, data, hm, comp_cfg_raw, nominal_priors)
-            else:
-                trace = run_lss_fit(
-                    mctable=mt_ds,
-                    signal_df=sig_ds,
-                    data=data,
-                    hm=hm,
-                    comp_cfg=comp_cfg_raw,
-                    nominal_priors=nominal_priors,
-                    chains=chains,
-                    draws=draws,
-                )
-
-            if save_traces and hasattr(trace, "to_netcdf"):
-                trace_path = traces_dir / f"trace_{cat_norm}_{variant}_ds{ds}_{self.point_id}.nc"
-                trace.to_netcdf(str(trace_path))
-
-            stats = extract_posterior_stats(trace)
-            ndbd_post = stats["ndbd_samples"]
-            all_ndbd_samples.append(ndbd_post)
-
-            mode_val = float(stats["component_modes"].get("ndbd", get_mode(ndbd_post)))
-            p16_val = float(stats["p16"])
-            p90_val = float(stats["p90"])
-
-            mode_bc = p16_bc = p90_bc = np.nan
-            if popt is not None:
-                corrected = apply_bias_correction(ndbd_post, popt)
-                mode_bc = float(get_mode(corrected))
-                p16_bc = float(np.percentile(corrected, 16))
-                p90_bc = float(np.percentile(corrected, 90))
-
-            row = {
-                "ds": ds,
-                "variant": variant,
-                "category": cat_norm,
-                "point_id": self.point_id,
-                "task_id": self.task_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "ndbd_mode": mode_val,
-                "ndbd_p16": p16_val,
-                "ndbd_p90": p90_val,
-                "ndbd_mode_bc": mode_bc,
-                "ndbd_p16_bc": p16_bc,
-                "ndbd_p90_bc": p90_bc,
-            }
-
-            for cname, cmode in stats["component_modes"].items():
-                if cname != "ndbd":
-                    row[f"{cname}_mode"] = cmode
-
-            rows.append(row)
-            if verbose and ((idx + 1) % 5 == 0 or (idx + 1) == len(jobs)):
-                print(
-                    f"[{self.point_id}] Completed {idx + 1}/{len(jobs)} {cat_norm} fits", flush=True
-                )
-
-        # Write HDF5 with all posterior samples
-        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
-        with h5py.File(temp_h5, "w") as h5f:
-            h5f.create_dataset(
-                "ndbd_samples",
-                data=np.array(all_ndbd_samples, dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            h5f.attrs["point_id"] = self.point_id
-            h5f.attrs["category"] = cat_norm
-            h5f.attrs["n_fits"] = len(rows)
-        temp_h5.replace(task_h5)
-
-        # Write CSV
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(
-                f"[{self.point_id}] Saved {len(df_res)} {cat_norm} fits: {task_csv} and {task_h5}"
-            )
-
-        return task_csv, task_h5
 
     def check_syst_bm_threshold(
         self,
@@ -1491,38 +495,9 @@ class StudyPoint:
         variant: str = "Threshold250",
     ) -> Dict[str, Any]:
         """Check completion status of BM threshold systematic fit for this study point."""
-        sdir = Path(study_dir)
-        task_csv = sdir / "tasks" / f"syst_bm_threshold_{self.point_id}.csv"
-        task_h5 = sdir / "tasks" / f"syst_bm_threshold_{self.point_id}_samples.h5"
+        from qpym2.studies.syst_bm import check_syst_bm_threshold
 
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= 1 and task_h5.exists() and task_h5.stat().st_size > 0
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "category": "bm_threshold",
-            "variant": variant,
-            "n_samples_target": 1,
-            "n_samples_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "task_h5": str(task_h5),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_syst_bm_threshold(self, study_dir=study_dir, variant=variant)
 
     def run_syst_bm_threshold(
         self,
@@ -1545,248 +520,28 @@ class StudyPoint:
         verbose: bool = True,
     ) -> Tuple[Path, Path]:
         """Execute BM threshold systematic fit (e.g. Threshold250 vs Threshold200)."""
-        import contextlib
-        import json
-        import h5py
-        import numpy as np
-        import pandas as pd
+        from qpym2.studies.syst_bm import run_syst_bm_threshold
 
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"syst_bm_threshold_{self.point_id}.csv"
-        task_h5 = tasks_dir / f"syst_bm_threshold_{self.point_id}_samples.h5"
-
-        if not force:
-            status = self.check_syst_bm_threshold(study_dir, variant=variant)
-            if status["is_completed"]:
-                if verbose:
-                    print(f"[{self.point_id}] BM threshold fit already completed. Skipping.")
-                return task_csv, task_h5
-
-        from qpym2.cfg.config_builders import get_results_raw_path, get_comp_cfg, get_jags_path
-        from qpym2.io.bkg_model import read_bm_variant_modes
-        from qpym2.storage.fits import (
-            setup_storage_fit,
-            assemble_fit_components,
-            resolve_storage_coords,
-            resolve_fit_template_uuids,
-        )
-
-        raw_path = results_raw_path or get_results_raw_path(cfg)
-        if not raw_path or not Path(raw_path).exists():
-            default_path = Path("/data/cuore/Analysis/BMMC/inputs/ResultsRaw.h5")
-            if default_path.exists():
-                raw_path = default_path
-            else:
-                raise FileNotFoundError(
-                    f"ResultsRaw.h5 not found at '{raw_path}'. Configure infrastructure.data_files.results_raw."
-                )
-
-        bm_modes = read_bm_variant_modes(raw_path, variant)
-
-        # Storage fit setup for systematic model key (ROI threshold=250)
-        coords_syst, hm_syst, _, input_dir_syst = resolve_storage_coords(cfg, model_key=model_key_syst)
-        comp_cfg_raw_syst = [dict(c) for c in get_comp_cfg(cfg, model_key=model_key_syst)]
-
-        fit_setup_syst = setup_storage_fit(
+        return run_syst_bm_threshold(
+            point=self,
             cfg=cfg,
-            model_key=model_key_syst,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            blinded=self.blinded,
-            prior_width="5sig",
-            mkchain_samples=100,
+            study_dir=study_dir,
+            variant=variant,
+            model_key_syst=model_key_syst,
+            results_raw_path=results_raw_path,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            bias_calibration=bias_calibration,
+            dedicated_bias_csv=dedicated_bias_csv,
+            fit_fn=fit_fn,
+            save_traces=save_traces,
+            force=force,
+            verbose=verbose,
         )
-
-        data_syst = fit_setup_syst["data"]
-        xedges_syst, yedges_syst = fit_setup_syst["edges"]
-        nominal_comps_syst = fit_setup_syst["fit_comps"]
-        nominal_priors_syst = list(nominal_comps_syst["prior"])
-
-        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
-            cfg=cfg,
-            model_key=model_key_syst,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-        )
-
-        mctable_syst, signal_df_syst, _, _ = assemble_fit_components(
-            input_dir=input_dir_syst,
-            jags_fpath=get_jags_path(cfg),
-            comp_cfg=comp_cfg_raw_syst,
-            hm=hm_syst,
-            uuid_base=uuid_base,
-            uuid_co=uuid_co,
-            uuid_ndbd=uuid_ndbd,
-        )
-
-        # Override norms from systematic BM modes
-        mt_syst = mctable_syst.copy()
-        mt_syst["norm"] = bm_modes.reindex(mt_syst.index).fillna(0.0)
-
-        from qpym2.models import m2
-        bkg_comps_syst = m2.make_bkgcomps_table(comp_cfg_raw_syst, mt_syst, smooth=hm_syst.smooth)
-        comps_syst = pd.concat([bkg_comps_syst, signal_df_syst], join="inner")
-        comps_syst["prior"] = nominal_priors_syst
-        comps_syst["varname"] = comps_syst.index
-
-        # Bias calibration resolution
-        popt = None
-        if dedicated_bias_csv:
-            dpath = Path(dedicated_bias_csv)
-            if not dpath.is_absolute():
-                dpath = sdir / dpath if (sdir / dpath).exists() else Path(dpath)
-            if dpath.exists():
-                from qpym2.fit.bias import get_bias_from_fitdf
-                vbias_df = pd.read_csv(str(dpath))
-                popt, _ = get_bias_from_fitdf(vbias_df)
-
-        if popt is None and isinstance(bias_calibration, dict):
-            calib = bias_calibration.get(self.point_id) or bias_calibration
-            if "a" in calib and "b" in calib:
-                popt = (float(calib["a"]), float(calib["b"]))
-        elif popt is None and bias_calibration is not None:
-            cpath = Path(bias_calibration)
-            if not cpath.is_absolute():
-                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
-            if cpath.exists():
-                with open(cpath, "r", encoding="utf-8") as f:
-                    calib_dict = json.load(f)
-                calib = calib_dict.get(self.point_id) or calib_dict
-                if "a" in calib and "b" in calib:
-                    popt = (float(calib["a"]), float(calib["b"]))
-
-        # Optional trace directory
-        traces_dir = sdir / "traces"
-        if save_traces:
-            traces_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            import pymc.sampling.parallel as _parallel
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.fit.bias import apply_bias_correction
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        fit_seed = int(seed + self.task_id * 10000 + 1)
-        np.random.seed(fit_seed)
-
-        if fit_fn is not None:
-            trace = fit_fn(data_syst, comps_syst, xedges_syst, yedges_syst)
-        else:
-            fik = m2.make_fik(comps_syst, data_syst, xedges_syst, yedges_syst)
-            model = m2.m2_model(comps_syst, fik)
-            with model:
-                trace = pm.sample(
-                    draws=draws,
-                    tune=tune,
-                    chains=chains,
-                    cores=1 if single_core else chains,
-                    return_inferencedata=True,
-                    target_accept=target_accept,
-                    progressbar=False,
-                    idata_kwargs={"log_likelihood": True},
-                    random_seed=fit_seed,
-                )
-
-        if save_traces and hasattr(trace, "to_netcdf"):
-            trace_path = traces_dir / f"trace_bm_threshold_{variant}_{self.point_id}.nc"
-            trace.to_netcdf(str(trace_path))
-
-        ndbd_post = trace.posterior["ndbd"].values.flatten()
-        stats = _get_stats(ndbd_post)
-        mode_val = float(stats["mode"])
-        p16_val = float(stats["p16"])
-        p90_val = float(stats["p90"])
-
-        logp_val = 0.0
-        if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-            ll = trace.log_likelihood
-            if hasattr(ll, "pik"):
-                arr = np.asarray(ll.pik.values).flatten()
-            elif isinstance(ll, dict) and "pik" in ll:
-                arr = np.asarray(ll["pik"]).flatten()
-            else:
-                arr = np.array([])
-            if len(arr) > 1:
-                try:
-                    logp_val = float(get_mode(arr))
-                except Exception:
-                    logp_val = float(np.median(arr))
-            elif len(arr) == 1:
-                logp_val = float(arr[0])
-
-        mode_bc = p16_bc = p90_bc = np.nan
-        if popt is not None:
-            corrected = apply_bias_correction(ndbd_post, popt)
-            mode_bc = float(get_mode(corrected))
-            p16_bc = float(np.percentile(corrected, 16))
-            p90_bc = float(np.percentile(corrected, 90))
-
-        row = {
-            "variant": variant,
-            "task_id": self.task_id,
-            "point_id": self.point_id,
-            "model_key": self.model_key,
-            "model_key_syst": model_key_syst,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": str(self.co_cut),
-            "ndbd_cutoff": str(self.ndbd_cutoff),
-            "ndbd_mode": mode_val,
-            "ndbd_p16": p16_val,
-            "ndbd_p90": p90_val,
-            "max_logp": logp_val,
-            "ndbd_mode_bc": mode_bc,
-            "ndbd_p16_bc": p16_bc,
-            "ndbd_p90_bc": p90_bc,
-        }
-
-        for cname in comps_syst.index:
-            if cname != "ndbd" and cname in trace.posterior:
-                c_post = trace.posterior[cname].values.flatten()
-                row[f"{cname}_mode"] = float(get_mode(c_post))
-
-        # Write HDF5 with posterior samples
-        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
-        with h5py.File(temp_h5, "w") as h5f:
-            h5f.create_dataset(
-                "ndbd_samples",
-                data=np.array([ndbd_post], dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            h5f.create_dataset("max_logp", data=np.array([logp_val], dtype=float))
-            h5f.attrs["point_id"] = self.point_id
-            h5f.attrs["variant"] = variant
-            h5f.attrs["model_key_syst"] = model_key_syst
-            h5f.attrs["category"] = "bm_threshold"
-        temp_h5.replace(task_h5)
-
-        # Write CSV
-        df_res = pd.DataFrame([row])
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved BM threshold fit ({variant}): {task_csv} and {task_h5}")
-
-        return task_csv, task_h5
 
     def check_syst_bm_binning(
         self,
@@ -1794,42 +549,9 @@ class StudyPoint:
         variants: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Check completion status of BM binning systematic fits for this study point."""
-        sdir = Path(study_dir)
-        _vars = variants if variants is not None else [
-            "MinBinSize_5_20", "MinBinSize_25_60", "BinningIntraAlphaBands"
-        ]
-        target_n = len(_vars)
-        task_csv = sdir / "tasks" / f"syst_bm_binning_{self.point_id}.csv"
-        task_h5 = sdir / "tasks" / f"syst_bm_binning_{self.point_id}_samples.h5"
+        from qpym2.studies.syst_bm import check_syst_bm_binning
 
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= target_n and task_h5.exists() and task_h5.stat().st_size > 0
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "category": "bm_binning",
-            "variants": _vars,
-            "n_samples_target": target_n,
-            "n_samples_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "task_h5": str(task_h5),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_syst_bm_binning(self, study_dir=study_dir, variants=variants)
 
     def run_syst_bm_binning(
         self,
@@ -1850,252 +572,26 @@ class StudyPoint:
         verbose: bool = True,
     ) -> Tuple[Path, Path]:
         """Execute BM binning systematic fits across variants (MinBinSize, IntraAlpha)."""
-        import contextlib
-        import json
-        import h5py
-        import numpy as np
-        import pandas as pd
+        from qpym2.studies.syst_bm import run_syst_bm_binning
 
-        _vars = variants if variants is not None else [
-            "MinBinSize_5_20", "MinBinSize_25_60", "BinningIntraAlphaBands"
-        ]
-
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"syst_bm_binning_{self.point_id}.csv"
-        task_h5 = tasks_dir / f"syst_bm_binning_{self.point_id}_samples.h5"
-
-        if not force:
-            status = self.check_syst_bm_binning(study_dir, variants=_vars)
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] BM binning fits already completed ({status['n_samples_completed']} variants). Skipping."
-                    )
-                return task_csv, task_h5
-
-        from qpym2.cfg.config_builders import get_results_raw_path, get_comp_cfg, get_jags_path
-        from qpym2.io.bkg_model import read_bm_variant_modes
-        from qpym2.storage.fits import (
-            setup_storage_fit,
-            assemble_fit_components,
-            resolve_storage_coords,
-            resolve_fit_template_uuids,
-        )
-
-        raw_path = results_raw_path or get_results_raw_path(cfg)
-        if not raw_path or not Path(raw_path).exists():
-            default_path = Path("/data/cuore/Analysis/BMMC/inputs/ResultsRaw.h5")
-            if default_path.exists():
-                raw_path = default_path
-            else:
-                raise FileNotFoundError(
-                    f"ResultsRaw.h5 not found at '{raw_path}'. Configure infrastructure.data_files.results_raw."
-                )
-
-        # Nominal fit setup (shapes and data remain unchanged for binning variants)
-        coords, hm, _, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
-        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
-
-        fit_setup = setup_storage_fit(
+        return run_syst_bm_binning(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            blinded=self.blinded,
-            prior_width="5sig",
-            mkchain_samples=100,
+            study_dir=study_dir,
+            variants=variants,
+            results_raw_path=results_raw_path,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            bias_calibration=bias_calibration,
+            fit_fn=fit_fn,
+            save_traces=save_traces,
+            force=force,
+            verbose=verbose,
         )
-
-        data = fit_setup["data"]
-        xedges, yedges = fit_setup["edges"]
-        nominal_comps = fit_setup["fit_comps"]
-        nominal_priors = list(nominal_comps["prior"])
-
-        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
-            cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-        )
-
-        mctable, signal_df, _, _ = assemble_fit_components(
-            input_dir=input_dir,
-            jags_fpath=get_jags_path(cfg),
-            comp_cfg=comp_cfg_raw,
-            hm=hm,
-            uuid_base=uuid_base,
-            uuid_co=uuid_co,
-            uuid_ndbd=uuid_ndbd,
-        )
-
-        # Resolve bias calibration
-        popt = None
-        if isinstance(bias_calibration, dict):
-            calib = bias_calibration.get(self.point_id) or bias_calibration
-            if "a" in calib and "b" in calib:
-                popt = (float(calib["a"]), float(calib["b"]))
-        elif bias_calibration is not None:
-            cpath = Path(bias_calibration)
-            if not cpath.is_absolute():
-                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
-            if cpath.exists():
-                with open(cpath, "r", encoding="utf-8") as f:
-                    calib_dict = json.load(f)
-                calib = calib_dict.get(self.point_id) or calib_dict
-                if "a" in calib and "b" in calib:
-                    popt = (float(calib["a"]), float(calib["b"]))
-
-        traces_dir = sdir / "traces"
-        if save_traces:
-            traces_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            import pymc.sampling.parallel as _parallel
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.models import m2
-        from qpym2.fit.bias import apply_bias_correction
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        rows = []
-        all_ndbd_samples = []
-        all_max_logp = []
-
-        for idx, v in enumerate(_vars):
-            v_seed = int(seed + self.task_id * 10000 + idx + 1)
-            np.random.seed(v_seed)
-
-            bm_modes_v = read_bm_variant_modes(raw_path, v)
-            mt_v = mctable.copy()
-            mt_v["norm"] = bm_modes_v.reindex(mt_v.index).fillna(0.0)
-
-            bkg_comps_v = m2.make_bkgcomps_table(comp_cfg_raw, mt_v, smooth=hm.smooth)
-            comps_v = pd.concat([bkg_comps_v, signal_df], join="inner")
-            comps_v["prior"] = nominal_priors
-            comps_v["varname"] = comps_v.index
-
-            if fit_fn is not None:
-                trace = fit_fn(data, comps_v, xedges, yedges)
-            else:
-                fik_v = m2.make_fik(comps_v, data, xedges, yedges)
-                model_v = m2.m2_model(comps_v, fik_v)
-                with model_v:
-                    trace = pm.sample(
-                        draws=draws,
-                        tune=tune,
-                        chains=chains,
-                        cores=1 if single_core else chains,
-                        return_inferencedata=True,
-                        target_accept=target_accept,
-                        progressbar=False,
-                        idata_kwargs={"log_likelihood": True},
-                        random_seed=v_seed,
-                    )
-
-            if save_traces and hasattr(trace, "to_netcdf"):
-                trace_path = traces_dir / f"trace_bm_binning_{v}_{self.point_id}.nc"
-                trace.to_netcdf(str(trace_path))
-
-            ndbd_post = trace.posterior["ndbd"].values.flatten()
-            all_ndbd_samples.append(ndbd_post)
-
-            stats = _get_stats(ndbd_post)
-            mode_val = float(stats["mode"])
-            p16_val = float(stats["p16"])
-            p90_val = float(stats["p90"])
-
-            logp_val = 0.0
-            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-                ll = trace.log_likelihood
-                if hasattr(ll, "pik"):
-                    arr = np.asarray(ll.pik.values).flatten()
-                elif isinstance(ll, dict) and "pik" in ll:
-                    arr = np.asarray(ll["pik"]).flatten()
-                else:
-                    arr = np.array([])
-                if len(arr) > 1:
-                    try:
-                        logp_val = float(get_mode(arr))
-                    except Exception:
-                        logp_val = float(np.median(arr))
-                elif len(arr) == 1:
-                    logp_val = float(arr[0])
-            all_max_logp.append(logp_val)
-
-            mode_bc = p16_bc = p90_bc = np.nan
-            if popt is not None:
-                corrected = apply_bias_correction(ndbd_post, popt)
-                mode_bc = float(get_mode(corrected))
-                p16_bc = float(np.percentile(corrected, 16))
-                p90_bc = float(np.percentile(corrected, 90))
-
-            row = {
-                "variant": v,
-                "task_id": self.task_id,
-                "point_id": self.point_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "ndbd_mode": mode_val,
-                "ndbd_p16": p16_val,
-                "ndbd_p90": p90_val,
-                "max_logp": logp_val,
-                "ndbd_mode_bc": mode_bc,
-                "ndbd_p16_bc": p16_bc,
-                "ndbd_p90_bc": p90_bc,
-            }
-
-            for cname in comps_v.index:
-                if cname != "ndbd" and cname in trace.posterior:
-                    c_post = trace.posterior[cname].values.flatten()
-                    row[f"{cname}_mode"] = float(get_mode(c_post))
-
-            rows.append(row)
-            if verbose:
-                print(f"[{self.point_id}] Completed BM binning fit ({v}): mode={mode_val:.2f}, mode_bc={mode_bc:.2f}")
-
-        # Write HDF5 with all posterior samples
-        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
-        with h5py.File(temp_h5, "w") as h5f:
-            h5f.create_dataset(
-                "ndbd_samples",
-                data=np.array(all_ndbd_samples, dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            h5f.create_dataset("max_logp", data=np.array(all_max_logp, dtype=float))
-            h5f.attrs["point_id"] = self.point_id
-            h5f.attrs["variants"] = _vars
-            h5f.attrs["category"] = "bm_binning"
-        temp_h5.replace(task_h5)
-
-        # Write CSV
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved {len(df_res)} BM binning fits: {task_csv} and {task_h5}")
-
-        return task_csv, task_h5
 
     def check_syst_template_binning(
         self,
@@ -2103,40 +599,9 @@ class StudyPoint:
         bin_sizes: Optional[List[float]] = None,
     ) -> Dict[str, Any]:
         """Check completion status of template binning (bin_size) systematic fits."""
-        sdir = Path(study_dir)
-        _sizes = bin_sizes if bin_sizes is not None else [2.0]
-        target_n = len(_sizes)
-        task_csv = sdir / "tasks" / f"syst_bin_size_{self.point_id}.csv"
-        task_h5 = sdir / "tasks" / f"syst_bin_size_{self.point_id}_samples.h5"
+        from qpym2.studies.syst_template import check_syst_template_binning
 
-        is_done = False
-        row_count = 0
-        if task_csv.exists() and task_csv.stat().st_size > 0:
-            import pandas as pd
-            try:
-                df = pd.read_csv(task_csv)
-                row_count = len(df)
-                is_done = row_count >= target_n and task_h5.exists() and task_h5.stat().st_size > 0
-            except Exception:
-                pass
-
-        return {
-            "point_id": self.point_id,
-            "task_id": self.task_id,
-            "model_key": self.model_key,
-            "co_shift": self.co_shift,
-            "ndbd_shift": self.ndbd_shift,
-            "co_cut": self.co_cut,
-            "ndbd_cutoff": self.ndbd_cutoff,
-            "category": "bin_size",
-            "bin_sizes": _sizes,
-            "n_samples_target": target_n,
-            "n_samples_completed": row_count,
-            "is_completed": is_done,
-            "task_csv": str(task_csv),
-            "task_h5": str(task_h5),
-            "status": "COMPLETED" if is_done else ("IN_PROGRESS" if row_count > 0 else "PENDING"),
-        }
+        return check_syst_template_binning(self, study_dir=study_dir, bin_sizes=bin_sizes)
 
     def run_syst_template_binning(
         self,
@@ -2155,241 +620,23 @@ class StudyPoint:
         force: bool = False,
         verbose: bool = True,
     ) -> Tuple[Path, Path]:
-        """Execute template likelihood binning fits for coarser bin sizes (e.g. 2.0 or 5.0 keV)."""
-        import contextlib
-        import json
-        import math
-        import h5py
-        import numpy as np
-        import pandas as pd
+        """Execute template likelihood binning fits for coarser bin sizes."""
+        from qpym2.studies.syst_template import run_syst_template_binning
 
-        _sizes = [float(b) for b in (bin_sizes if bin_sizes is not None else [2.0])]
-
-        sdir = Path(study_dir)
-        tasks_dir = sdir / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        task_csv = tasks_dir / f"syst_bin_size_{self.point_id}.csv"
-        task_h5 = tasks_dir / f"syst_bin_size_{self.point_id}_samples.h5"
-
-        if not force:
-            status = self.check_syst_template_binning(study_dir, bin_sizes=_sizes)
-            if status["is_completed"]:
-                if verbose:
-                    print(
-                        f"[{self.point_id}] Template binning fits already completed ({status['n_samples_completed']} sizes). Skipping."
-                    )
-                return task_csv, task_h5
-
-        from qpym2.storage.fits import (
-            setup_storage_fit,
-            assemble_fit_components,
-            resolve_storage_coords,
-            resolve_fit_template_uuids,
-        )
-        from qpym2.cfg.config_builders import get_comp_cfg, get_jags_path
-        from qpym2.utils import TempConfig
-
-        coords, hm_base, _, input_dir = resolve_storage_coords(cfg, model_key=self.model_key)
-        comp_cfg_raw = [dict(c) for c in get_comp_cfg(cfg, model_key=self.model_key)]
-
-        fit_setup = setup_storage_fit(
+        return run_syst_template_binning(
+            point=self,
             cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-            blinded=self.blinded,
-            prior_width="5sig",
-            mkchain_samples=100,
+            study_dir=study_dir,
+            bin_sizes=bin_sizes,
+            seed=seed,
             chains=chains,
             draws=draws,
             tune=tune,
             target_accept=target_accept,
-            dry_run=False,
+            single_core=single_core,
+            bias_calibration=bias_calibration,
+            fit_fn=fit_fn,
+            save_traces=save_traces,
+            force=force,
+            verbose=verbose,
         )
-
-        data = fit_setup["data"]
-        nominal_comps = fit_setup["fit_comps"]
-        nominal_priors = list(nominal_comps["prior"])
-
-        tpl_uuids, uuid_base, uuid_co, uuid_ndbd = resolve_fit_template_uuids(
-            cfg=cfg,
-            model_key=self.model_key,
-            co_cut=self.co_cut,
-            ndbd_cutoff=self.ndbd_cutoff,
-            co_shift=self.co_shift,
-            ndbd_shift=self.ndbd_shift,
-        )
-
-        mctable, signal_df, _, _ = assemble_fit_components(
-            input_dir=input_dir,
-            jags_fpath=get_jags_path(cfg),
-            comp_cfg=comp_cfg_raw,
-            hm=hm_base,
-            uuid_base=uuid_base,
-            uuid_co=uuid_co,
-            uuid_ndbd=uuid_ndbd,
-        )
-
-        # Bias calibration resolution
-        popt = None
-        if isinstance(bias_calibration, dict):
-            calib = bias_calibration.get(self.point_id) or bias_calibration
-            if "a" in calib and "b" in calib:
-                popt = (float(calib["a"]), float(calib["b"]))
-        elif bias_calibration is not None:
-            cpath = Path(bias_calibration)
-            if not cpath.is_absolute():
-                cpath = sdir / cpath if (sdir / cpath).exists() else Path(cpath)
-            if cpath.exists():
-                with open(cpath, "r", encoding="utf-8") as f:
-                    calib_dict = json.load(f)
-                calib = calib_dict.get(self.point_id) or calib_dict
-                if "a" in calib and "b" in calib:
-                    popt = (float(calib["a"]), float(calib["b"]))
-
-        traces_dir = sdir / "traces"
-        if save_traces:
-            traces_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            import pymc.sampling.parallel as _parallel
-            _parallel.threadpool_limits = lambda **kwargs: contextlib.nullcontext()
-        except Exception:
-            pass
-
-        from qpym2.models import m2
-        from qpym2.fit.bias import apply_bias_correction
-        from qpym2.fit.results import _get_stats
-        from qpym2.utils.hists import get_empty_hist
-        from qpym2.utils.mathy import get_mode
-        import pymc as pm
-
-        rows = []
-        all_ndbd_samples = []
-        all_max_logp = []
-
-        for idx, bs in enumerate(_sizes):
-            bs_seed = int(seed + self.task_id * 10000 + idx + 1)
-            np.random.seed(bs_seed)
-
-            # Build modified histogram model with new bin size
-            hm_bs = TempConfig(**{k: getattr(hm_base, k) for k in vars(hm_base)})
-            hm_bs.bin_size = bs
-            hm_bs.binsize = bs / math.sqrt(2)
-            _, xedges_bs, yedges_bs = get_empty_hist(hm_bs)
-
-            bkg_comps_bs = m2.make_bkgcomps_table(comp_cfg_raw, mctable, smooth=hm_base.smooth)
-            comps_bs = pd.concat([bkg_comps_bs, signal_df], join="inner")
-            comps_bs["prior"] = nominal_priors
-            comps_bs["varname"] = comps_bs.index
-
-            if fit_fn is not None:
-                trace = fit_fn(data, comps_bs, xedges_bs, yedges_bs)
-            else:
-                fik_bs = m2.make_fik(comps_bs, data, xedges_bs, yedges_bs)
-                model_bs = m2.m2_model(comps_bs, fik_bs)
-                with model_bs:
-                    trace = pm.sample(
-                        draws=draws,
-                        tune=tune,
-                        chains=chains,
-                        cores=1 if single_core else chains,
-                        return_inferencedata=True,
-                        target_accept=target_accept,
-                        progressbar=False,
-                        idata_kwargs={"log_likelihood": True},
-                        random_seed=bs_seed,
-                    )
-
-            if save_traces and hasattr(trace, "to_netcdf"):
-                trace_path = traces_dir / f"trace_bin_size_{bs:.1f}_{self.point_id}.nc"
-                trace.to_netcdf(str(trace_path))
-
-            ndbd_post = trace.posterior["ndbd"].values.flatten()
-            all_ndbd_samples.append(ndbd_post)
-
-            stats = _get_stats(ndbd_post)
-            mode_val = float(stats["mode"])
-            p16_val = float(stats["p16"])
-            p90_val = float(stats["p90"])
-
-            logp_val = 0.0
-            if hasattr(trace, "log_likelihood") and trace.log_likelihood is not None:
-                ll = trace.log_likelihood
-                if hasattr(ll, "pik"):
-                    arr = np.asarray(ll.pik.values).flatten()
-                elif isinstance(ll, dict) and "pik" in ll:
-                    arr = np.asarray(ll["pik"]).flatten()
-                else:
-                    arr = np.array([])
-                if len(arr) > 1:
-                    try:
-                        logp_val = float(get_mode(arr))
-                    except Exception:
-                        logp_val = float(np.median(arr))
-                elif len(arr) == 1:
-                    logp_val = float(arr[0])
-            all_max_logp.append(logp_val)
-
-            mode_bc = p16_bc = p90_bc = np.nan
-            if popt is not None:
-                corrected = apply_bias_correction(ndbd_post, popt)
-                mode_bc = float(get_mode(corrected))
-                p16_bc = float(np.percentile(corrected, 16))
-                p90_bc = float(np.percentile(corrected, 90))
-
-            row = {
-                "bin_size": bs,
-                "task_id": self.task_id,
-                "point_id": self.point_id,
-                "model_key": self.model_key,
-                "co_shift": self.co_shift,
-                "ndbd_shift": self.ndbd_shift,
-                "co_cut": str(self.co_cut),
-                "ndbd_cutoff": str(self.ndbd_cutoff),
-                "ndbd_mode": mode_val,
-                "ndbd_p16": p16_val,
-                "ndbd_p90": p90_val,
-                "max_logp": logp_val,
-                "ndbd_mode_bc": mode_bc,
-                "ndbd_p16_bc": p16_bc,
-                "ndbd_p90_bc": p90_bc,
-            }
-
-            for cname in comps_bs.index:
-                if cname != "ndbd" and cname in trace.posterior:
-                    c_post = trace.posterior[cname].values.flatten()
-                    row[f"{cname}_mode"] = float(get_mode(c_post))
-
-            rows.append(row)
-            if verbose:
-                print(f"[{self.point_id}] Completed template binning fit ({bs} keV): mode={mode_val:.2f}, mode_bc={mode_bc:.2f}")
-
-        # Write HDF5 with all posterior samples
-        temp_h5 = tasks_dir / f".tmp_{task_h5.name}"
-        with h5py.File(temp_h5, "w") as h5f:
-            h5f.create_dataset(
-                "ndbd_samples",
-                data=np.array(all_ndbd_samples, dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            h5f.create_dataset("max_logp", data=np.array(all_max_logp, dtype=float))
-            h5f.attrs["point_id"] = self.point_id
-            h5f.attrs["bin_sizes"] = _sizes
-            h5f.attrs["category"] = "bin_size"
-        temp_h5.replace(task_h5)
-
-        # Write CSV
-        df_res = pd.DataFrame(rows)
-        temp_csv = tasks_dir / f".tmp_{task_csv.name}"
-        df_res.to_csv(temp_csv, index=False)
-        temp_csv.replace(task_csv)
-
-        if verbose:
-            print(f"[{self.point_id}] Saved {len(df_res)} template binning fits: {task_csv} and {task_h5}")
-
-        return task_csv, task_h5
-

@@ -17,8 +17,24 @@ canonical test/lint commands. This file maps the package.
 | `utils/` | Shared utilities | `logging.py`, `hists.py`, `hist_model.py`, `pool.py`, `mathy.py`, `hw.py`, `TempConfig.py` |
 | `core/` | Lower-level ROOT/hist primitives | `qroot.py`, `hists.py` |
 | `storage/` | Data storage layout, hashing, HDF5 metadata, input generation, fit assembly, and study indexing | `schema.py`, `hasher.py`, `paths.py`, `backend.py`, `inputs.py`, `fits.py`, `study.py` |
-| `studies/` | Study folder config inheritance, assembly, input validation, fit execution, bias toy fits, and results aggregation | `config.py`, `point.py`, `assembly.py`, `study.py` |
+| `studies/` | Study folder config inheritance, assembly, input validation, fit execution, bias toy fits, systematics, and rate marginalisation | `config.py`, `point.py`, `study.py`, `assembly.py`, `toys.py`, `syst_runner.py`, `marginalize.py` |
 | `tests/` | Test suite | see root `AGENTS.md` "Testing" |
+
+### `studies/` layout
+
+- `point.py`: `StudyPoint` dataclass, path resolvers, point-level runner/collector delegates.
+- `study.py`: `Study` container, study manifest and input builders, campaign delegates.
+- `assembly.py`: Study directory inspection and instantiation (`assemble_study`).
+- `config.py`: Hierarchical OmegaConf study config inheritance (`study.yaml`).
+- `toys.py`: Bias & sensitivity toys generation, execution, progress tracking, and calibration result collection.
+- `syst_mc.py`: Background model Monte Carlo systematic fits and posterior sample extraction with prior re-weighting.
+- `syst_lss.py`: Lineshape (SSCL & dQ) simulations, completion checks, and delta parameter extractions.
+- `syst_bm.py`: Background model variant systematics (threshold 200 vs 250 keV, binning alternatives).
+- `syst_template.py`: Template likelihood binning and smoothing variant fits and delta extractions.
+- `syst_runner.py`: Dispatcher and aggregator for multi-point systematic campaigns, delta tables, and reporting.
+- `marginalize.py`: Prior smearing, split-Gaussian integration, PSA marginalisation, and limit extraction.
+- `_common.py`: Shared atomic file writes, task status inspectors, posterior mode finders, summary stats extractors.
+
 
 ## Conventions
 

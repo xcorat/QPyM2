@@ -184,7 +184,9 @@ def assemble_study(
         defaults_sec.get("model_key") or defaults_sec.get("models") or "default"
     )
 
-    reference = OmegaConf.to_container(cfg.get("reference", {}), resolve=True) if "reference" in cfg else {}
+    reference = (
+        OmegaConf.to_container(cfg.get("reference", {}), resolve=True) if "reference" in cfg else {}
+    )
     sweep = OmegaConf.to_container(cfg.get("sweep", {}), resolve=True) if "sweep" in cfg else None
 
     points = expand_study_points(
