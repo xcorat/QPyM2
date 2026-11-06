@@ -1,0 +1,18 @@
+{
+  "nominal": {
+    "point_id": "nominal",
+    "task_id": 0,
+    "category": "lss_sscl",
+    "co_shift": 1.0,
+    "ndbd_shift": 0.0,
+    "co_cut": "gamma10_v150",
+    "ndbd_cutoff": "u1740",
+    "n_samples": 15,
+    "mode_nom": 42.49804656826236,
+    "delta_mode": 1.826148212879518,
+    "delta_right": 8.338496277658168,
+    "delta_left": -0.0,
+    "bc_a": 1.0178877904678634,
+    "bc_b": -4.442987618321653
+  }
+}

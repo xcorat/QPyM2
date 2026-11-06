@@ -1,21 +1,27 @@
-""" qls_scaling.py
+"""qls_scaling.py
 
-    This module contains the input/output functions needed for CUORE 
-    lineshape and lineshape scaling root files.
+This module contains the input/output functions needed for CUORE
+lineshape and lineshape scaling root files.
 
 """
-from random import sample
+
 import glob
 import pandas as pd
 import numpy as np
 
-from ROOT import TFile, TF1
+from ROOT import TFile
 from ROOT import RDataFrame as RDF
 
-def read_scaling_pars(fnames, fnQ_name='fit_function_Q', covQ_name='covariance_matrix_Q',
-                      fn_sigma_name='fit_function_sigma', cov_sigma_name='covariance_matrix_sigma'):
-    """ Read residual and resolution scaling fit out put from the given list of files 
-    
+
+def read_scaling_pars(
+    fnames,
+    fnQ_name='fit_function_Q',
+    covQ_name='covariance_matrix_Q',
+    fn_sigma_name='fit_function_sigma',
+    cov_sigma_name='covariance_matrix_sigma',
+):
+    """Read residual and resolution scaling fit out put from the given list of files
+
     Parameters
     ----------
     fnames : list of str
@@ -55,8 +61,9 @@ def read_scaling_pars(fnames, fnQ_name='fit_function_Q', covQ_name='covariance_m
 
     return fnQ, covQ, fn_sigma, cov_sigma
 
+
 def read_lspars(fname, tree_name="fitParamTree", rename_cols={}):
-    """ Read the lineshape parameters from the given root file. Usually this contains
+    """Read the lineshape parameters from the given root file. Usually this contains
     the lineshape parameters for each dataset/channel, and the exposures.
 
     Parameters
@@ -85,7 +92,7 @@ def read_lspars(fname, tree_name="fitParamTree", rename_cols={}):
         'SubPeakEnergyRatio': 'pl_ratio',
         'SubPeakEnergyRatio2': 'pr_ratio',
         'SubPeakRatio': 'el_ratio',
-        'SubPeakRatio2': 'er_ratio'
+        'SubPeakRatio2': 'er_ratio',
     }
     cols = {**_NEW_COLS, **rename_cols}
 
@@ -97,17 +104,20 @@ def read_lspars(fname, tree_name="fitParamTree", rename_cols={}):
     return df.to_xarray()
 
 
-def read_peakshape_exposures(cfg, datasets=None, tree_name="fitParamTree"):
+def read_peakshape_exposures(cfg, datasets=None, tree_name="fitParamTree", lss_data_path=None):
     """Read per-dataset exposures from PeakShape ROOT files configured in Hydra."""
     from qpym2.cfg.syst_config import (
-        get_lss_data_path, build_lss_file_paths, DEFAULT_LSS_DATASETS
+        get_lss_data_path,
+        build_lss_file_paths,
+        DEFAULT_LSS_DATASETS,
     )
 
     if datasets is None:
         datasets = list(DEFAULT_LSS_DATASETS)
 
-    dpath = get_lss_data_path(cfg)
+    dpath = lss_data_path or get_lss_data_path(cfg)
     _, peakshape_glob = build_lss_file_paths(dpath, datasets, cfg)
+
     files = sorted(glob.glob(peakshape_glob))
     if not files:
         raise FileNotFoundError(f"No PeakShape files found for glob: {peakshape_glob}")
@@ -128,28 +138,29 @@ def read_peakshape_exposures(cfg, datasets=None, tree_name="fitParamTree"):
 
     exposures_df = (
         pd.DataFrame(rows, columns=['ds', 'exposure_kg_yr'])
-          .drop_duplicates(subset='ds', keep='last')
-          .set_index('ds')
-          .sort_index()
+        .drop_duplicates(subset='ds', keep='last')
+        .set_index('ds')
+        .sort_index()
     )
     return exposures_df
 
 
 def sample_pars(fn, cov, skip_last_par=True, skip_last_cov=False, nsamples=1, sample_point=None):
-    """ Sample parameters from a function and covariance matrix """
+    """Sample parameters from a function and covariance matrix"""
     # TODO: TODO
     # cov.Print()
-    means = np.array([ fn.GetParameter(i) for i in range(fn.GetNpar()) ])
+    means = np.array([fn.GetParameter(i) for i in range(fn.GetNpar())])
     means = means[:-1] if skip_last_par else means
 
     n = cov.GetNrows()
-    if skip_last_cov: n -= 1
-    cv = np.array([ [ cov(i, j) for j in range(n) ] for i in range(n) ])
+    if skip_last_cov:
+        n -= 1
+    cv = np.array([[cov(i, j) for j in range(n)] for i in range(n)])
 
-    if(len(means) != cv.shape[0]):
+    if len(means) != cv.shape[0]:
         # print(means, cv)
         raise ValueError("Means and covariance matrix have different dimensions")
-        
+
     if sample_point is None:
         sampled = np.random.multivariate_normal(means, cv, size=nsamples)
     elif sample_point == 0:
@@ -161,23 +172,27 @@ def sample_pars(fn, cov, skip_last_par=True, skip_last_cov=False, nsamples=1, sa
         # l = np.linalg.cholesky(cv)
         # errs = np.ones(shape=means.shape)*psigma
         # sampled = means + np.dot(l, errs)
-        errs = np.sqrt(np.diag(cv))*psigma
+        errs = np.sqrt(np.diag(cv)) * psigma
         sampled = means + errs
     return sampled
 
-def read_ls_syst(cfg):
-    """ Read LSS systematic parameters from ROOT files.
-    """
+
+def read_ls_syst(cfg=None, lss_data_path=None):
+    """Read LSS systematic parameters from ROOT files."""
     from qpym2.cfg.syst_config import (
-        get_lss_data_path, build_lss_file_paths, DEFAULT_LSS_DATASETS
+        get_lss_data_path,
+        build_lss_file_paths,
+        DEFAULT_LSS_DATASETS,
     )
 
     def _fnpars(fn, skip_last=True):
-        p = [fn.GetParameter(i) for i in range(fn.GetNpar()) ]
-        if skip_last: return p[:-1]
-        else: return p
+        p = [fn.GetParameter(i) for i in range(fn.GetNpar())]
+        if skip_last:
+            return p[:-1]
+        else:
+            return p
 
-    dpath = get_lss_data_path(cfg)
+    dpath = lss_data_path or (get_lss_data_path(cfg) if cfg is not None else None)
     datasets = list(DEFAULT_LSS_DATASETS)
     fnames_root, fname_ls = build_lss_file_paths(dpath, datasets, cfg)
 
@@ -185,22 +200,37 @@ def read_ls_syst(cfg):
     dfps = read_lspars(fname_ls)
 
     qpars0 = [_fnpars(fn) for fn in fns_Q]
-    qpars_1l = [sample_pars(fn, cov, skip_last_par=True, nsamples=1, sample_point=-1) for fn, cov in zip(fns_Q, covs_Q)]
-    qpars_1r = [sample_pars(fn, cov, skip_last_par=True, nsamples=1, sample_point=1) for fn, cov in zip(fns_Q, covs_Q)]
+    qpars_1l = [
+        sample_pars(fn, cov, skip_last_par=True, nsamples=1, sample_point=-1)
+        for fn, cov in zip(fns_Q, covs_Q)
+    ]
+    qpars_1r = [
+        sample_pars(fn, cov, skip_last_par=True, nsamples=1, sample_point=1)
+        for fn, cov in zip(fns_Q, covs_Q)
+    ]
 
     sigma_pars0 = [_fnpars(fn, skip_last=False) for fn in fns_sigma]
-    sigma_pars_1l = [sample_pars(fn, cov, skip_last_par=False, nsamples=1, sample_point=-1) for fn, cov in zip(fns_sigma, covs_sigma)]
-    sigma_pars_1r = [sample_pars(fn, cov, skip_last_par=False, nsamples=1, sample_point=1) for fn, cov in zip(fns_sigma, covs_sigma)]
+    sigma_pars_1l = [
+        sample_pars(fn, cov, skip_last_par=False, nsamples=1, sample_point=-1)
+        for fn, cov in zip(fns_sigma, covs_sigma)
+    ]
+    sigma_pars_1r = [
+        sample_pars(fn, cov, skip_last_par=False, nsamples=1, sample_point=1)
+        for fn, cov in zip(fns_sigma, covs_sigma)
+    ]
 
-    qpars_df = pd.DataFrame({'q_pars': qpars0,
-                             'q_pars_sample_1l': qpars_1l,
-                             'q_pars_sample_1r': qpars_1r,
-                              'sigma_pars': sigma_pars0,
-                              'sigma_pars_sample_1l': sigma_pars_1l, # useless?
-                              'sigma_pars_sample_1r': sigma_pars_1r,
-                            },
-                            index=datasets).rename_axis('ds')
-    
+    qpars_df = pd.DataFrame(
+        {
+            'q_pars': qpars0,
+            'q_pars_sample_1l': qpars_1l,
+            'q_pars_sample_1r': qpars_1r,
+            'sigma_pars': sigma_pars0,
+            'sigma_pars_sample_1l': sigma_pars_1l,  # useless?
+            'sigma_pars_sample_1r': sigma_pars_1r,
+        },
+        index=datasets,
+    ).rename_axis('ds')
+
     return qpars_df, dfps
 
 
@@ -214,18 +244,21 @@ def read_sigma0(df_lspars, n_ds=15, n_ch=988, ds_start=3601) -> np.ndarray:
     arr = np.zeros(n_ds * n_ch)
     for k in range(n_ds * n_ch):
         try:
-            s0 = float(df_lspars.sigma.sel(
-                {'ds': ds_start + k // n_ch, 'ch': 1 + k % n_ch}, method=None))
+            s0 = float(
+                df_lspars.sigma.sel({'ds': ds_start + k // n_ch, 'ch': 1 + k % n_ch}, method=None)
+            )
             arr[k] = s0
         except Exception:
             pass
     return arr.reshape(n_ds, n_ch)
 
+
 # ---------------------------------------------------------------------------
 # NEW: Wrapper to get lss_params dict (added 2026-03-29)
 # ---------------------------------------------------------------------------
 
-def load_lss_params(cfg, n_ds=15, n_ch=988):
+
+def load_lss_params(cfg=None, n_ds=15, n_ch=988, lss_data_path=None):
     """Load all LSS lineshape parameters from ROOT files via config.
 
     Wrapper around read_ls_syst that returns the dict format expected by
@@ -235,6 +268,7 @@ def load_lss_params(cfg, n_ds=15, n_ch=988):
         cfg: Hydra configuration object.
         n_ds: Number of datasets (default: 15).
         n_ch: Number of channels (default: 988).
+        lss_data_path: Optional explicit path to LSS ROOT files.
 
     Returns:
         dict with keys:
@@ -247,7 +281,7 @@ def load_lss_params(cfg, n_ds=15, n_ch=988):
     """
     from qpym2.cfg.syst_config import DEFAULT_LSS_DATASETS
 
-    qpars_df, dfps = read_ls_syst(cfg)
+    qpars_df, dfps = read_ls_syst(cfg=cfg, lss_data_path=lss_data_path)
 
     datasets = list(DEFAULT_LSS_DATASETS)
     ds_start = datasets[0]
@@ -269,16 +303,17 @@ def load_lss_params(cfg, n_ds=15, n_ch=988):
     sigma0_2d = read_sigma0(dfps, n_ds=n_ds, n_ch=n_ch, ds_start=ds_start)
 
     return {
-        'sigma0_2d':        sigma0_2d,
-        'delta_p1_1r':      delta_p1_1r,
-        'delta_p1_1l':      delta_p1_1l,
-        'q_pars_arr':       q_pars_arr,
+        'sigma0_2d': sigma0_2d,
+        'delta_p1_1r': delta_p1_1r,
+        'delta_p1_1l': delta_p1_1l,
+        'q_pars_arr': q_pars_arr,
         'q_pars_sample_1r': q_pars_sample_1r,
         'q_pars_sample_1l': q_pars_sample_1l,
     }
 
+
 # NEW
-def sample_dq_random(cfg, n_samples=100, seed=None):
+def sample_dq_random(cfg=None, n_samples=100, seed=None, lss_data_path=None):
     """Draw N random Q-residual parameter sets from each dataset's covariance matrix.
 
     For each dataset, calls ``sample_pars(fn, cov, sample_point=None)``
@@ -289,19 +324,18 @@ def sample_dq_random(cfg, n_samples=100, seed=None):
         cfg: Hydra configuration object.
         n_samples: Number of random parameter draws per dataset.
         seed: Optional RNG seed for reproducibility.
+        lss_data_path: Optional explicit path to LSS ROOT files.
 
     Returns:
         list of length n_samples, where each element is a list of arrays
         (one per dataset).  So ``result[i][ids]`` is the parameter
         vector for sample *i*, dataset index *ids*.
     """
-    from qpym2.cfg.syst_config import (
-        get_lss_data_path, build_lss_file_paths, DEFAULT_LSS_DATASETS
-    )
+    from qpym2.cfg.syst_config import get_lss_data_path, build_lss_file_paths, DEFAULT_LSS_DATASETS
 
     rng = np.random.default_rng(seed)
 
-    dpath = get_lss_data_path(cfg)
+    dpath = lss_data_path or (get_lss_data_path(cfg) if cfg is not None else None)
     datasets = list(DEFAULT_LSS_DATASETS)
     fnames_root, _ = build_lss_file_paths(dpath, datasets, cfg)
 

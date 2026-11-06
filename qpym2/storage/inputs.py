@@ -366,7 +366,8 @@ def create_storage_inputs_for_point(
     coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key)
     staging_id = str(getattr(getattr(cfg, 'staging', None), 'version', 'v1'))
     staging_dir = Path(get_staging_dir(cfg))
-    treename = str(cfg.qroot.output_tree_name)
+    qroot = getattr(cfg, 'qroot', None) or getattr(getattr(cfg, 'staging', None), 'qroot', None)
+    treename = str(getattr(qroot, 'output_tree_name', 'uvtree'))
     jags_fpath = get_jags_path(cfg)
 
     # Cut definitions

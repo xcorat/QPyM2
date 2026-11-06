@@ -1,12 +1,11 @@
 # @package _global_
 # Default Staging Configuration
-# Transformation/selection contract only (raw -> staged uvtree ROOT).
-# Source and output paths live in the environment tier; ROOT tree/branch names
-# come from `qroot`. Per the model-parameter taxonomy, staging must not depend
-# on model ROI, co_cut, ndbd_cutoff, binning, smoothing, or shifts.
+# Transformation/selection contract (raw -> staged uvtree ROOT).
+# Physical machine roots live in the environment tier.
 
 staging:
   version: 1
+  staging_input_root: "cuore_data_root"
   cuts:
     base: "true"
     multiplicity: "Multiplicity == 2"
@@ -21,3 +20,11 @@ staging:
     data:
       out_fname: "data.root"
       out_blinded_fname: "data_blinded.root"
+
+qroot:
+  tree_name: "outTree"
+  energy_var: "Energy"
+  esum_var: "TotalEnergy"
+  channel_vars: ["Channel", "Multiplet[1]"]
+  output_tree_name: "uvtree"
+  output_columns: ["u0", "v0", "ch1", "ch2", "ds", "t"]

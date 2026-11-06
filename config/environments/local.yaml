@@ -8,6 +8,7 @@ defaults:
 
 infrastructure:
   data_root: "/data/cuore/Analysis/MC"
+  cuore_data_root: "/data/cuore/Analysis/MC"
   directories:
     bm_dir: "BM_1ton"
     ndbd_mc_dir: "tech_note/0vbb"
@@ -18,6 +19,7 @@ infrastructure:
     plots_dir: "tech_note/plots"
   data_files:
     bkg_syst_corrmat: "BM_1ton/fit/Output/default/CorrelationMatrix.csv"
+    lss_data_path: "/data/cuore/Software/nersc-modern-docker/cuoremc-git/ares/data/Nature2021"
 
 system:
   verbose_logging: false

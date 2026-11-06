@@ -124,6 +124,7 @@ def test_schema_and_normalization():
     # Check templates are sorted by key
     assert list(fit_dict["templates"].keys()) == ["co60", "u238"]
     assert fit_dict["roi_settings"]["skip_roi"] == [2515.0, 2540.0]
+    assert "mcmc" not in fit_dict
 
 
 def test_deterministic_hashing():

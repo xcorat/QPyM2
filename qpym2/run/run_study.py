@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import sys
+from omegaconf import OmegaConf
 
 from qpym2.studies import assemble_study
 
@@ -27,7 +28,9 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-s", "--study-dir", "--study-name",
+        "-s",
+        "--study-dir",
+        "--study-name",
         dest="study_dir",
         required=True,
         help="Path or name of the study folder containing study.yaml",
@@ -129,6 +132,59 @@ def parse_args():
         default=None,
         help="Optional path to bias_calibration.json to compute bias-corrected sensitivities",
     )
+    # Systematic study arguments
+    parser.add_argument(
+        "--check-syst",
+        action="store_true",
+        default=False,
+        help="Check and print systematic task completion status for all study points",
+    )
+    parser.add_argument(
+        "--run-syst",
+        action="store_true",
+        default=False,
+        help="Execute systematic fits across all study points",
+    )
+    parser.add_argument(
+        "--collect-syst",
+        action="store_true",
+        default=False,
+        help="Merge systematic task results, combine mixture posteriors, and compute delta shifts",
+    )
+    parser.add_argument(
+        "--category",
+        default=None,
+        help="Systematic category override (e.g. bmmc, lss_sscl, lss_dq)",
+    )
+    parser.add_argument(
+        "--dq-mode",
+        default=None,
+        choices=["pm1", "random"],
+        help="Evaluation mode for lss_dq (pm1 or random)",
+    )
+    parser.add_argument(
+        "--n-dq",
+        type=int,
+        default=None,
+        help="Number of random parameter draws for lss_dq random mode",
+    )
+    parser.add_argument(
+        "--lss-data-path",
+        default=None,
+        help="Path to LSS ROOT calibration files directory",
+    )
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=None,
+        help="Number of systematic samples to evaluate (default: from config or 100)",
+    )
+    parser.add_argument(
+        "--stat-only",
+        action="store_true",
+        default=False,
+        help="Sample raw JAGS chain without covariance matrix perturbation (stat-only)",
+    )
     parser.add_argument(
         "--n-toys",
         type=int,
@@ -160,26 +216,34 @@ def parse_args():
         help="Master RNG seed for bias toys (default: 42)",
     )
     parser.add_argument(
-        "--prior-width", choices=["5sig", "10sig", "syst", "2syst"], default="5sig",
+        "--prior-width",
+        choices=["5sig", "10sig", "syst", "2syst"],
+        default="5sig",
         help="Prior width mode",
     )
     parser.add_argument(
-        "--chains", type=int, default=8,
+        "--chains",
+        type=int,
+        default=8,
         help="Number of MCMC chains",
     )
     parser.add_argument(
-        "--draws", type=int, default=20000,
+        "--draws",
+        type=int,
+        default=20000,
         help="Number of MCMC draws per chain",
     )
     parser.add_argument(
-        "-o", "--override",
+        "-o",
+        "--override",
         dest="overrides",
         action="append",
         default=None,
         help="Dotlist configuration override (e.g. -o reference.co_shift=0.5)",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         default=False,
         help="Verbose logging output",
@@ -199,6 +263,23 @@ def main():
 
     print(f"[INFO] Successfully assembled {study}.")
 
+    if getattr(args, "category", None):
+        if not hasattr(study.cfg, "syst") or study.cfg.syst is None:
+            study.cfg.syst = OmegaConf.create({})
+        study.cfg.syst.category = args.category
+    if getattr(args, "dq_mode", None):
+        if not hasattr(study.cfg, "syst") or study.cfg.syst is None:
+            study.cfg.syst = OmegaConf.create({})
+        study.cfg.syst.dq_mode = args.dq_mode
+    if getattr(args, "n_dq", None):
+        if not hasattr(study.cfg, "syst") or study.cfg.syst is None:
+            study.cfg.syst = OmegaConf.create({})
+        study.cfg.syst.n_samples = args.n_dq
+    if getattr(args, "lss_data_path", None):
+        if not hasattr(study.cfg, "syst") or study.cfg.syst is None:
+            study.cfg.syst = OmegaConf.create({})
+        study.cfg.syst.lss_data_path = args.lss_data_path
+
     # 1. Manifest generation if requested
     if args.save_manifest:
         mpath = study.save_manifest()
@@ -212,7 +293,15 @@ def main():
     # 3. Print input status report
     is_bias_mode = args.check_bias or args.run_bias or args.collect_bias
     is_sens_mode = args.check_sens or args.run_sens or args.collect_sens
-    if args.check_inputs or (not args.check_fits and not args.run_fits and not args.collect_results and not is_bias_mode and not is_sens_mode):
+    is_syst_mode = args.check_syst or args.run_syst or args.collect_syst
+    if args.check_inputs or (
+        not args.check_fits
+        and not args.run_fits
+        and not args.collect_results
+        and not is_bias_mode
+        and not is_sens_mode
+        and not is_syst_mode
+    ):
         study.print_input_status()
 
     # 4. Standard fit execution if requested
@@ -285,6 +374,28 @@ def main():
         print("[INFO] Collecting sensitivity results and computing summary metrics...")
         study.collect_sens_results(bias_calibration=args.sens_bias_calib, verbose=args.verbose)
 
+    # 13. Systematic fit execution if requested
+    if args.run_syst:
+        print(f"[INFO] Running systematic fits across study points (force={args.force_fits})...")
+        study.run_syst(
+            n_samples=args.n_samples,
+            seed=args.seed,
+            chains=args.chains if args.chains != 8 else 2,
+            draws=args.draws if args.draws != 20000 else 2500,
+            stat_only=args.stat_only,
+            force=args.force_fits,
+            save_traces=args.save_trace,
+            verbose=args.verbose,
+        )
+
+    # 14. Check systematic completion status
+    if args.check_syst or args.run_syst:
+        study.print_syst_status(n_samples=args.n_samples)
+
+    # 15. Collect systematic results, compute delta shifts, and update SQLite
+    if args.collect_syst or args.run_syst:
+        print("[INFO] Collecting systematic results and computing delta shifts...")
+        study.collect_syst_results(bias_calibration=args.sens_bias_calib, verbose=args.verbose)
 
 
 if __name__ == "__main__":

@@ -12,9 +12,9 @@ for systematic analysis outputs.
 DEFAULT_LSS_DATASETS = range(3601, 3616, 1)
 
 DEFAULT_LSS_SYST_SAMPLES = {
-    'sscale_1r': {'type': 'sscl', 'spt':  1},
-    'dqres_1r':  {'type': 'dq',   'ptn': '1r'},
-    'dqres_1l':  {'type': 'dq',   'ptn': '1l'},
+    'sscale_1r': {'type': 'sscl', 'spt': 1},
+    'dqres_1r': {'type': 'dq', 'ptn': '1r'},
+    'dqres_1l': {'type': 'dq', 'ptn': '1l'},
 }
 
 # LSS file patterns (used with lss_data_path)
@@ -26,6 +26,7 @@ DEFAULT_LSS_PEAKSHAPE_PATTERN = 'PeakShape_ds*.root'
 # ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------
+
 
 def get_systematic_dir(cfg):
     """Get systematic output directory from config.
@@ -44,11 +45,16 @@ def get_systematic_dir(cfg):
         ValueError: If neither data_dir nor systematic_dir is configured.
     """
     from qpym2.cfg.config_builders import get_syst_dir
+
     return get_syst_dir(cfg)
 
 
 def get_lss_data_path(cfg):
     """Get LSS data path from config.
+
+    Resolution order:
+    1. ``cfg.infrastructure.data_files.lss_data_path``
+    2. ``cfg.syst.lss_data_path`` (study-level override)
 
     Args:
         cfg: Hydra configuration object.
@@ -57,17 +63,28 @@ def get_lss_data_path(cfg):
         str: Path to LSS ROOT data files.
 
     Raises:
-        ValueError: If cfg.infrastructure.data_files.lss_data_path is not set.
+        ValueError: If lss_data_path is not set or empty in config.
     """
+    path = None
     try:
-        return cfg.infrastructure.data_files.lss_data_path
-    except (AttributeError, Exception) as e:
-        if 'not in struct' in str(e) or isinstance(e, AttributeError):
-            raise ValueError(
-                "cfg.infrastructure.data_files.lss_data_path is not set. "
-                "Please configure it in your environment YAML or use --lss-data-path."
-            ) from e
-        raise
+        path = cfg.infrastructure.data_files.lss_data_path
+    except (AttributeError, Exception):
+        pass
+
+    if not path:
+        try:
+            path = cfg.syst.lss_data_path
+        except (AttributeError, Exception):
+            pass
+
+    if not path:
+        raise ValueError(
+            "LSS data path is not configured. Please configure "
+            "infrastructure.data_files.lss_data_path in your environment YAML "
+            "or syst.lss_data_path in your study config."
+        )
+
+    return str(path)
 
 
 def get_lss_file_patterns(cfg):
@@ -81,8 +98,8 @@ def get_lss_file_patterns(cfg):
     """
     try:
         patterns = cfg.infrastructure.data_files.lss_file_patterns
-        scaling = getattr(patterns, 'scaling', DEFAULT_LSS_SCALING_PATTERN)
-        peakshape = getattr(patterns, 'peakshape', DEFAULT_LSS_PEAKSHAPE_PATTERN)
+        scaling = getattr(patterns, "scaling", DEFAULT_LSS_SCALING_PATTERN)
+        peakshape = getattr(patterns, "peakshape", DEFAULT_LSS_PEAKSHAPE_PATTERN)
         return scaling, peakshape
     except AttributeError:
         return DEFAULT_LSS_SCALING_PATTERN, DEFAULT_LSS_PEAKSHAPE_PATTERN
@@ -103,16 +120,16 @@ def build_lss_file_paths(lss_data_path, datasets, cfg=None):
     """
     import os
 
+    if not lss_data_path:
+        raise ValueError(f"lss_data_path must be a valid directory path, got {lss_data_path!r}.")
+
     if cfg is not None:
         scaling_pat, peakshape_pat = get_lss_file_patterns(cfg)
     else:
         scaling_pat = DEFAULT_LSS_SCALING_PATTERN
         peakshape_pat = DEFAULT_LSS_PEAKSHAPE_PATTERN
 
-    scaling_fnames = [
-        os.path.join(lss_data_path, scaling_pat.format(ds=ds))
-        for ds in datasets
-    ]
+    scaling_fnames = [os.path.join(lss_data_path, scaling_pat.format(ds=ds)) for ds in datasets]
     peakshape_glob = os.path.join(lss_data_path, peakshape_pat)
 
     return scaling_fnames, peakshape_glob

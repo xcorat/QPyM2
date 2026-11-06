@@ -127,11 +127,39 @@ def get_data_root(cfg: DictConfig) -> str:
     return str(p)
 
 
-def resolve_data_path(cfg: DictConfig, path_val: Union[str, Path, None]) -> Optional[str]:
-    """Resolve a folder path relative to the configured data root."""
+def get_cuore_data_root(cfg: DictConfig) -> str:
+    """Return the absolute CUORE data root for staging raw inputs from config.
+
+    Falls back to infrastructure.data_root if infrastructure.cuore_data_root is not set.
+    """
+    raw = None
+    infrastructure = getattr(cfg, 'infrastructure', None)
+    if infrastructure is not None:
+        raw = getattr(infrastructure, 'cuore_data_root', None)
+    if raw is None or raw == "":
+        return get_data_root(cfg)
+    p = Path(str(raw)).expanduser()
+    if not p.is_absolute():
+        raise ValueError(
+            f"infrastructure.cuore_data_root must be an absolute path (got {raw!r}); "
+            "all relative staging input paths are resolved against it."
+        )
+    return str(p)
+
+
+def resolve_data_path(
+    cfg: DictConfig,
+    path_val: Union[str, Path, None],
+    root_key: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve a folder path relative to the configured data root (or specified root_key)."""
     if path_val is None or path_val == "":
         return None
-    return resolve_path(path_val, base=get_data_root(cfg))
+    if root_key == 'cuore_data_root':
+        base = get_cuore_data_root(cfg)
+    else:
+        base = get_data_root(cfg)
+    return resolve_path(path_val, base=base)
 
 
 class HydraConfigManager:

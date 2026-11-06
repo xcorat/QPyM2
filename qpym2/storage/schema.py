@@ -85,6 +85,13 @@ def build_template_hash_dict(
     }
 
 
+def normalize_mcmc_dict(mcmc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Normalize MCMC sampling parameters for execution metadata."""
+    if not mcmc:
+        return None
+    return {k: mcmc[k] for k in sorted(mcmc.keys())}
+
+
 def build_fit_hash_dict(
     model_name: str,
     data_source: str,
@@ -97,7 +104,11 @@ def build_fit_hash_dict(
     schema_version: int = 1,
 ) -> Dict[str, Any]:
     """
-    Construct canonical dictionary representing a fit configuration.
+    Construct canonical dictionary representing the mathematical fit problem.
+
+    Sampler parameters (mcmc) are execution details and are intentionally
+    excluded from the returned hash dictionary so that changing draws, chains,
+    or tuning steps does not invalidate the core fit problem UUID.
 
     Args:
         model_name: Fit formulation ('m2', 'm2_binned', etc.).
@@ -106,12 +117,13 @@ def build_fit_hash_dict(
         smoothing: Smoothing configuration (enabled, method, kernel).
         priors: Prior parameters (sigma_scale, use_sample_std, sample_mkchain).
         roi_settings: Likelihood / ROI exclusion settings (e.g. {'skip_roi': [2515, 2540]}).
-        mcmc: MCMC sampling parameters (chains, draws, tune, target_accept).
+        mcmc: Ignored for hashing; retained for backward compatibility.
         study_context: Optional study-specific settings (e.g. {'injected_n': 10, 'seed': 47}).
         schema_version: Schema version.
 
     Returns:
-        Canonical parameter dictionary ready for deterministic hashing.
+        Canonical parameter dictionary representing the mathematical target,
+        ready for deterministic hashing.
     """
     sorted_templates = {k: str(templates[k]) for k in sorted(templates.keys())}
 
@@ -137,8 +149,6 @@ def build_fit_hash_dict(
             else:
                 norm_roi[k] = v
 
-    norm_mcmc = {k: mcmc[k] for k in sorted(mcmc.keys())} if mcmc else None
-
     norm_study = None
     if study_context:
         norm_study = {}
@@ -156,6 +166,5 @@ def build_fit_hash_dict(
         'smoothing': norm_smoothing,
         'priors': norm_priors,
         'roi_settings': norm_roi,
-        'mcmc': norm_mcmc,
         'study_context': norm_study,
     }

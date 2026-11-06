@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from qpym2.utils.logging import log, start_timer, log_elapsed
+from qpym2.utils.logging import start_timer, log_elapsed
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +68,7 @@ def _lss_fit_single(job, ws=None):
     os.environ['PYTENSOR_FLAGS'] = f'compiledir={_worker_dir}'
     import pytensor  # noqa: F401
     import pathlib
+
     (pathlib.Path.home() / '.cache' / 'arviz').mkdir(parents=True, exist_ok=True)
 
     # Unpack — dq jobs carry an extra q_pars_sample element
@@ -79,8 +80,10 @@ def _lss_fit_single(job, ws=None):
 
     import time as _time
     from qpym2.fit.syst_lss import (
-        run_sscl_fit, run_dq_fit,
-        extract_posterior_stats, apply_bias_correction,
+        run_sscl_fit,
+        run_dq_fit,
+        extract_posterior_stats,
+        apply_bias_correction,
     )
 
     label = f"{sname} ds={ds}"
@@ -101,13 +104,19 @@ def _lss_fit_single(job, ws=None):
             spt = scfg.get('spt', 1)
             dp1_key = 'delta_p1_1r' if spt >= 0 else 'delta_p1_1l'
             trace = run_sscl_fit(
-                ws['evdata'], ws['mcfit_table'], ws['data'],
-                ws['hm'], ws['comp_cfg'], ws['nominal_priors'],
+                ws['evdata'],
+                ws['mcfit_table'],
+                ws['data'],
+                ws['hm'],
+                ws['comp_cfg'],
+                ws['nominal_priors'],
                 target_ds=ds,
                 ch_sigma0=ws['lss_params']['sigma0_2d'][ids],
                 delta_p1=ws['lss_params'][dp1_key][ids],
-                chains=ws['chains'], draws=ws['draws'],
-                cuts_mc=cuts_mc, cuts_ndbd=cuts_ndbd,
+                chains=ws['chains'],
+                draws=ws['draws'],
+                cuts_mc=cuts_mc,
+                cuts_ndbd=cuts_ndbd,
             )
         elif stype == 'dq':
             if q_pars_sample is not None:
@@ -116,13 +125,19 @@ def _lss_fit_single(job, ws=None):
                 ptn = scfg['ptn']
                 qps = ws['lss_params'][f'q_pars_sample_{ptn}'][ids]
             trace = run_dq_fit(
-                ws['evdata'], ws['mcfit_table'], ws['data'],
-                ws['hm'], ws['comp_cfg'], ws['nominal_priors'],
+                ws['evdata'],
+                ws['mcfit_table'],
+                ws['data'],
+                ws['hm'],
+                ws['comp_cfg'],
+                ws['nominal_priors'],
                 target_ds=ds,
                 q_pars_mean=ws['lss_params']['q_pars_arr'][ids],
                 q_pars_sample=qps,
-                chains=ws['chains'], draws=ws['draws'],
-                cuts_mc=cuts_mc, cuts_ndbd=cuts_ndbd,
+                chains=ws['chains'],
+                draws=ws['draws'],
+                cuts_mc=cuts_mc,
+                cuts_ndbd=cuts_ndbd,
             )
         else:
             raise ValueError(f"Unknown syst type: {stype}")
@@ -130,7 +145,8 @@ def _lss_fit_single(job, ws=None):
         # Save trace if requested
         if ws.get('save_trace_dir'):
             trace_path = os.path.join(
-                ws['save_trace_dir'], f'trace_{sname}_ds{ds}.nc',
+                ws['save_trace_dir'],
+                f'trace_{sname}_ds{ds}.nc',
             )
             trace.to_netcdf(trace_path)
             print(f"  [{label}] saved trace to {trace_path}", flush=True)
@@ -142,13 +158,17 @@ def _lss_fit_single(job, ws=None):
         mode_bc = p16_bc = p90_bc = np.nan
         if ws.get('bias_popt') is not None:
             bc = apply_bias_correction(
-                stats['ndbd_samples'], ws['bias_popt'], ws['bias_pcov'],
+                stats['ndbd_samples'],
+                ws['bias_popt'],
+                ws['bias_pcov'],
             )
             mode_bc, p16_bc, p90_bc = bc['mode_bc'], bc['p16_bc'], bc['p90_bc']
 
         _elapsed = _time.perf_counter() - _t0
-        print(f"  [{label}] ndbd_mode={component_modes.get('ndbd', np.nan):.4f}"
-              f"  ({_elapsed:.1f}s)", flush=True)
+        print(
+            f"  [{label}] ndbd_mode={component_modes.get('ndbd', np.nan):.4f}  ({_elapsed:.1f}s)",
+            flush=True,
+        )
         return (sname, ds, component_modes, p16, p90, mode_bc, p16_bc, p90_bc)
 
     except Exception as e:
@@ -161,6 +181,7 @@ def _lss_fit_single(job, ws=None):
 # Shared setup
 # ---------------------------------------------------------------------------
 
+
 def _setup_common(args):
     """Load config, data, LSS params, and materialize RDFs to numpy.
 
@@ -168,8 +189,11 @@ def _setup_common(args):
     """
     from qpym2.cfg.hydra_adapter import get_config
     from qpym2.cfg.config_builders import (
-        get_h2uv_model, get_jags_path, get_fit_dir,
-        build_input_config, get_comp_cfg,
+        get_h2uv_model,
+        get_jags_path,
+        get_fit_dir,
+        build_input_config,
+        get_comp_cfg,
     )
     from qpym2.cfg.model_utils import build_model_dir, get_shift_suffix
     from qpym2.cfg.syst_config import get_systematic_dir, get_lss_data_path
@@ -203,9 +227,11 @@ def _setup_common(args):
     # LSS data path
     lss_data_path = args.lss_data_path or get_lss_data_path(cfg)
     if lss_data_path is None:
-        print("[setup] ERROR: --lss-data-path not provided and "
-              "cfg.infrastructure.data_files.lss_data_path not set.",
-              file=sys.stderr)
+        print(
+            "[setup] ERROR: --lss-data-path not provided and "
+            "cfg.infrastructure.data_files.lss_data_path not set.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     datasets = list(range(args.ds_start, args.ds_end))
@@ -213,7 +239,7 @@ def _setup_common(args):
 
     # LSS parameters
     print("[setup] loading LSS parameters ...", flush=True)
-    lss_params = load_lss_params(cfg, n_ds=n_ds)
+    lss_params = load_lss_params(cfg, n_ds=n_ds, lss_data_path=lss_data_path)
 
     # Background model (for mcfit_table metadata only — priors from nominal fit)
     print("[setup] reading background model ...", flush=True)
@@ -234,15 +260,18 @@ def _setup_common(args):
     print("[setup] reading nominal fit priors ...", flush=True)
     fit_dir = get_fit_dir(cfg)
     model_dir = build_model_dir(
-        co_cut=args.co_cut, ndbd_cutoff=args.ndbd_cutoff,
+        co_cut=args.co_cut,
+        ndbd_cutoff=args.ndbd_cutoff,
     )
     shift_suffix = get_shift_suffix(co_shift=args.co_shift)
     nominal_fit_h5 = os.path.join(fit_dir, model_dir, f'fit{shift_suffix}.h5')
     nominal_comps = pd.read_hdf(nominal_fit_h5, key='components')
     nominal_priors = list(nominal_comps['prior'])
-    print(f"[setup] nominal priors ({len(nominal_priors)} components): "
-          f"{[p[0] if isinstance(p, tuple) else type(p).__name__ for p in nominal_priors]}",
-          flush=True)
+    print(
+        f"[setup] nominal priors ({len(nominal_priors)} components): "
+        f"{[p[0] if isinstance(p, tuple) else type(p).__name__ for p in nominal_priors]}",
+        flush=True,
+    )
 
     comp_cfg = list(comp_cfg_base)
 
@@ -254,8 +283,7 @@ def _setup_common(args):
         if rdf is None:
             evdata[comp] = None
         else:
-            evdata[comp] = {c: np.array(a) for c, a
-                            in rdf.AsNumpy(columns=_NP_COLS).items()}
+            evdata[comp] = {c: np.array(a) for c, a in rdf.AsNumpy(columns=_NP_COLS).items()}
     n_mat = sum(1 for v in evdata.values() if v is not None)
     print(f"[setup] materialized {n_mat} components", flush=True)
     del evtrees
@@ -276,10 +304,11 @@ def _setup_common(args):
             'co_shift': args.co_shift,
         }
         bias_popt, bias_pcov = read_bias_csv(
-            args.bias_csv, model_pars, xmin=args.xmin_bias,
+            args.bias_csv,
+            model_pars,
+            xmin=args.xmin_bias,
         )
-        print(f"[setup] bias correction: a={bias_popt[0]:.4f}, "
-              f"b={bias_popt[1]:.4f}", flush=True)
+        print(f"[setup] bias correction: a={bias_popt[0]:.4f}, b={bias_popt[1]:.4f}", flush=True)
 
     return {
         'cfg': cfg,
@@ -303,36 +332,44 @@ def _set_worker_shared(ctx, args):
     """Populate _WORKER_SHARED from setup context."""
     global _WORKER_SHARED
     _WORKER_SHARED = {
-        'evdata':          ctx['evdata'],
-        'mcfit_table':     ctx['mcfit_table'],
-        'fit_cfg':         ctx['fit_cfg'],
-        'lss_params':      ctx['lss_params'],
-        'data':            ctx['data'],
-        'hm':              ctx['hm'],
-        'comp_cfg':        ctx['comp_cfg'],
-        'nominal_priors':  ctx['nominal_priors'],
-        'chains':          args.chains,
-        'draws':           args.draws,
-        'ds_start':        ctx['datasets'][0],
-        'bias_popt':       ctx['bias_popt'],
-        'bias_pcov':       ctx['bias_pcov'],
-        'save_trace_dir':  ctx.get('save_trace_dir'),
+        'evdata': ctx['evdata'],
+        'mcfit_table': ctx['mcfit_table'],
+        'fit_cfg': ctx['fit_cfg'],
+        'lss_params': ctx['lss_params'],
+        'data': ctx['data'],
+        'hm': ctx['hm'],
+        'comp_cfg': ctx['comp_cfg'],
+        'nominal_priors': ctx['nominal_priors'],
+        'chains': args.chains,
+        'draws': args.draws,
+        'ds_start': ctx['datasets'][0],
+        'bias_popt': ctx['bias_popt'],
+        'bias_pcov': ctx['bias_pcov'],
+        'save_trace_dir': ctx.get('save_trace_dir'),
     }
 
 
-def _build_xr_datavars(ndbd_mode, ndbd_p16, ndbd_p90,
-                       ndbd_mode_bc, ndbd_p16_bc, ndbd_p90_bc,
-                       comp_modes, dim_names, has_bias):
+def _build_xr_datavars(
+    ndbd_mode,
+    ndbd_p16,
+    ndbd_p90,
+    ndbd_mode_bc,
+    ndbd_p16_bc,
+    ndbd_p90_bc,
+    comp_modes,
+    dim_names,
+    has_bias,
+):
     """Build xarray data_vars dict from result arrays."""
     dvars = {
         'ndbd_mode': (dim_names, ndbd_mode),
-        'ndbd_p16':  (dim_names, ndbd_p16),
-        'ndbd_p90':  (dim_names, ndbd_p90),
+        'ndbd_p16': (dim_names, ndbd_p16),
+        'ndbd_p90': (dim_names, ndbd_p90),
     }
     if has_bias:
         dvars['ndbd_mode_bc'] = (dim_names, ndbd_mode_bc)
-        dvars['ndbd_p16_bc']  = (dim_names, ndbd_p16_bc)
-        dvars['ndbd_p90_bc']  = (dim_names, ndbd_p90_bc)
+        dvars['ndbd_p16_bc'] = (dim_names, ndbd_p16_bc)
+        dvars['ndbd_p90_bc'] = (dim_names, ndbd_p90_bc)
     for var_name, mode_arr in comp_modes.items():
         if var_name != 'ndbd':
             dvars[f'{var_name}_mode'] = (dim_names, mode_arr)
@@ -347,6 +384,7 @@ def _peak_mem_mb():
 # ---------------------------------------------------------------------------
 # SSCL runner
 # ---------------------------------------------------------------------------
+
 
 def run_sscl(args):
     """Sigma-scaling systematic: fixed +1σ, one fit per dataset."""
@@ -372,22 +410,24 @@ def run_sscl(args):
     njobs = min(njobs, n_total)
     print(f"[sscl] {n_total} fits with {njobs} workers", flush=True)
 
-    ndbd_mode    = np.full((n_ds, 1), np.nan)
-    ndbd_p16     = np.full((n_ds, 1), np.nan)
-    ndbd_p90     = np.full((n_ds, 1), np.nan)
+    ndbd_mode = np.full((n_ds, 1), np.nan)
+    ndbd_p16 = np.full((n_ds, 1), np.nan)
+    ndbd_p90 = np.full((n_ds, 1), np.nan)
     ndbd_mode_bc = np.full((n_ds, 1), np.nan)
-    ndbd_p16_bc  = np.full((n_ds, 1), np.nan)
-    ndbd_p90_bc  = np.full((n_ds, 1), np.nan)
+    ndbd_p16_bc = np.full((n_ds, 1), np.nan)
+    ndbd_p90_bc = np.full((n_ds, 1), np.nan)
     comp_modes_all = {}
 
     ds_to_i = {d: i for i, d in enumerate(datasets)}
 
     mp_ctx = multiprocessing.get_context('spawn')
-    with mp_ctx.Pool(processes=njobs, maxtasksperchild=1,
-                     initializer=_worker_pool_init,
-                     initargs=(_WORKER_SHARED,)) as pool:
-        for _n, (sname, ds, comp_modes, p16, p90,
-                 m_bc, p16_bc, p90_bc) in enumerate(
+    with mp_ctx.Pool(
+        processes=njobs,
+        maxtasksperchild=1,
+        initializer=_worker_pool_init,
+        initargs=(_WORKER_SHARED,),
+    ) as pool:
+        for _n, (sname, ds, comp_modes, p16, p90, m_bc, p16_bc, p90_bc) in enumerate(
             pool.imap_unordered(_lss_fit_single, jobs), start=1
         ):
             i = ds_to_i[ds]
@@ -396,12 +436,12 @@ def run_sscl(args):
                     comp_modes_all[vn] = np.full((n_ds, 1), np.nan)
                 comp_modes_all[vn][i, 0] = mv
 
-            ndbd_mode[i, 0]    = comp_modes.get('ndbd', np.nan)
-            ndbd_p16[i, 0]     = p16
-            ndbd_p90[i, 0]     = p90
+            ndbd_mode[i, 0] = comp_modes.get('ndbd', np.nan)
+            ndbd_p16[i, 0] = p16
+            ndbd_p90[i, 0] = p90
             ndbd_mode_bc[i, 0] = m_bc
-            ndbd_p16_bc[i, 0]  = p16_bc
-            ndbd_p90_bc[i, 0]  = p90_bc
+            ndbd_p16_bc[i, 0] = p16_bc
+            ndbd_p90_bc[i, 0] = p90_bc
 
             if _n % max(1, n_total // 5) == 0 or _n == n_total:
                 print(f"[sscl] {_n}/{n_total}", flush=True)
@@ -411,16 +451,24 @@ def run_sscl(args):
     os.makedirs(out_dir, exist_ok=True)
 
     dvars = _build_xr_datavars(
-        ndbd_mode, ndbd_p16, ndbd_p90,
-        ndbd_mode_bc, ndbd_p16_bc, ndbd_p90_bc,
-        comp_modes_all, ['ds', 'systs'], has_bias=bool(args.bias_csv),
+        ndbd_mode,
+        ndbd_p16,
+        ndbd_p90,
+        ndbd_mode_bc,
+        ndbd_p16_bc,
+        ndbd_p90_bc,
+        comp_modes_all,
+        ['ds', 'systs'],
+        has_bias=bool(args.bias_csv),
     )
     res = xr.Dataset(
         dvars,
         coords={'ds': datasets, 'systs': ['sscale_1r']},
         attrs={
-            'co_cut': args.co_cut, 'ndbd_cutoff': args.ndbd_cutoff,
-            'co_shift': args.co_shift, 'environment': args.environment,
+            'co_cut': args.co_cut,
+            'ndbd_cutoff': args.ndbd_cutoff,
+            'co_shift': args.co_shift,
+            'environment': args.environment,
         },
     )
     cs_tag = str(args.co_shift).replace('.', 'p')
@@ -435,6 +483,7 @@ def run_sscl(args):
 # ---------------------------------------------------------------------------
 # DQ runner
 # ---------------------------------------------------------------------------
+
 
 def run_dq(args):
     """Q-residual systematic: N random parameter draws per dataset.
@@ -468,10 +517,13 @@ def run_dq(args):
         print("[dq] using fixed ±1σ parameter sets (pm1 mode)", flush=True)
     else:
         from qpym2.io.qls_scaling import sample_dq_random
+
         n_dq = args.n_dq
         print(f"[dq] sampling {n_dq} random parameter draws ...", flush=True)
         dq_random_samples = sample_dq_random(
-            ctx['cfg'], n_samples=n_dq, seed=args.dq_seed,
+            ctx['cfg'],
+            n_samples=n_dq,
+            seed=args.dq_seed,
         )
         _dq_snames = None
 
@@ -489,15 +541,16 @@ def run_dq(args):
     n_total = len(jobs)
     njobs = args.njobs if args.njobs > 0 else max(1, (os.cpu_count() or 1) // 2)
     njobs = min(njobs, n_total)
-    print(f"[dq] {n_total} fits ({n_dq} samples × {n_ds} datasets) "
-          f"with {njobs} workers", flush=True)
+    print(
+        f"[dq] {n_total} fits ({n_dq} samples × {n_ds} datasets) with {njobs} workers", flush=True
+    )
 
-    ndbd_mode    = np.full((n_ds, n_dq), np.nan)
-    ndbd_p16     = np.full((n_ds, n_dq), np.nan)
-    ndbd_p90     = np.full((n_ds, n_dq), np.nan)
+    ndbd_mode = np.full((n_ds, n_dq), np.nan)
+    ndbd_p16 = np.full((n_ds, n_dq), np.nan)
+    ndbd_p90 = np.full((n_ds, n_dq), np.nan)
     ndbd_mode_bc = np.full((n_ds, n_dq), np.nan)
-    ndbd_p16_bc  = np.full((n_ds, n_dq), np.nan)
-    ndbd_p90_bc  = np.full((n_ds, n_dq), np.nan)
+    ndbd_p16_bc = np.full((n_ds, n_dq), np.nan)
+    ndbd_p90_bc = np.full((n_ds, n_dq), np.nan)
     comp_modes_all = {}
 
     ds_to_i = {d: i for i, d in enumerate(datasets)}
@@ -506,11 +559,13 @@ def run_dq(args):
     _t_pool = time.perf_counter()
 
     mp_ctx = multiprocessing.get_context('spawn')
-    with mp_ctx.Pool(processes=njobs, maxtasksperchild=1,
-                     initializer=_worker_pool_init,
-                     initargs=(_WORKER_SHARED,)) as pool:
-        for _n, (sname, ds, comp_modes, p16, p90,
-                 m_bc, p16_bc, p90_bc) in enumerate(
+    with mp_ctx.Pool(
+        processes=njobs,
+        maxtasksperchild=1,
+        initializer=_worker_pool_init,
+        initargs=(_WORKER_SHARED,),
+    ) as pool:
+        for _n, (sname, ds, comp_modes, p16, p90, m_bc, p16_bc, p90_bc) in enumerate(
             pool.imap_unordered(_lss_fit_single, jobs), start=1
         ):
             i, j = ds_to_i[ds], sname_to_j[sname]
@@ -520,34 +575,46 @@ def run_dq(args):
                     comp_modes_all[vn] = np.full((n_ds, n_dq), np.nan)
                 comp_modes_all[vn][i, j] = mv
 
-            ndbd_mode[i, j]    = comp_modes.get('ndbd', np.nan)
-            ndbd_p16[i, j]     = p16
-            ndbd_p90[i, j]     = p90
+            ndbd_mode[i, j] = comp_modes.get('ndbd', np.nan)
+            ndbd_p16[i, j] = p16
+            ndbd_p90[i, j] = p90
             ndbd_mode_bc[i, j] = m_bc
-            ndbd_p16_bc[i, j]  = p16_bc
-            ndbd_p90_bc[i, j]  = p90_bc
+            ndbd_p16_bc[i, j] = p16_bc
+            ndbd_p90_bc[i, j] = p90_bc
 
             if _n % _log_interval == 0 or _n == n_total:
                 _elapsed = time.perf_counter() - _t_pool
-                print(f"[dq] {_n}/{n_total}  elapsed={_elapsed:.1f}s"
-                      f"  peak_mem={_peak_mem_mb():.0f} MiB", flush=True)
+                print(
+                    f"[dq] {_n}/{n_total}  elapsed={_elapsed:.1f}s"
+                    f"  peak_mem={_peak_mem_mb():.0f} MiB",
+                    flush=True,
+                )
 
     # Save
     out_dir = args.output_dir or ctx['syst_dir']
     os.makedirs(out_dir, exist_ok=True)
 
     dvars = _build_xr_datavars(
-        ndbd_mode, ndbd_p16, ndbd_p90,
-        ndbd_mode_bc, ndbd_p16_bc, ndbd_p90_bc,
-        comp_modes_all, ['ds', 'samples'], has_bias=bool(args.bias_csv),
+        ndbd_mode,
+        ndbd_p16,
+        ndbd_p90,
+        ndbd_mode_bc,
+        ndbd_p16_bc,
+        ndbd_p90_bc,
+        comp_modes_all,
+        ['ds', 'samples'],
+        has_bias=bool(args.bias_csv),
     )
     res = xr.Dataset(
         dvars,
         coords={'ds': datasets, 'samples': sample_names},
         attrs={
-            'co_cut': args.co_cut, 'ndbd_cutoff': args.ndbd_cutoff,
-            'co_shift': args.co_shift, 'environment': args.environment,
-            'n_dq': n_dq, 'dq_seed': args.dq_seed if args.dq_seed is not None else -1,
+            'co_cut': args.co_cut,
+            'ndbd_cutoff': args.ndbd_cutoff,
+            'co_shift': args.co_shift,
+            'environment': args.environment,
+            'n_dq': n_dq,
+            'dq_seed': args.dq_seed if args.dq_seed is not None else -1,
         },
     )
     cs_tag = str(args.co_shift).replace('.', 'p')
@@ -564,6 +631,7 @@ def run_dq(args):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _add_common_args(parser):
     """Add arguments shared by both subcommands."""
     parser.add_argument('--environment', '-e', default=None)
@@ -572,23 +640,31 @@ def _add_common_args(parser):
     parser.add_argument('--co-cut', default='gamma10_v150')
     parser.add_argument('--ndbd-cutoff', default='u1740')
     parser.add_argument('--co-shift', type=float, default=1.0)
-    parser.add_argument('--lss-data-path', default=None,
-                        help='Path to per-dataset LSS ROOT files.')
+    parser.add_argument('--lss-data-path', default=None, help='Path to per-dataset LSS ROOT files.')
     parser.add_argument('--ds-start', type=int, default=3601)
     parser.add_argument('--ds-end', type=int, default=3616)
     parser.add_argument('--draws', type=int, default=2500)
     parser.add_argument('--chains', type=int, default=2)
-    parser.add_argument('--output-dir', '-o', default=None,
-                        help='Output directory (default: systematic_dir from config).')
+    parser.add_argument(
+        '--output-dir',
+        '-o',
+        default=None,
+        help='Output directory (default: systematic_dir from config).',
+    )
     parser.add_argument('--mkchain-samples', type=int, default=100)
-    parser.add_argument('--njobs', type=int, default=0,
-                        help='Parallel workers (0 = os.cpu_count() // 2).')
-    parser.add_argument('--bias-csv', default=None,
-                        help='Path to batch CSV with bias fit results.')
-    parser.add_argument('--xmin-bias', type=float, default=15,
-                        help='Minimum ndbd_inj for bias fit (default: 15).')
-    parser.add_argument('--save-traces', action='store_true', default=False,
-                        help='Save per-fit MCMC traces to <output_dir>/traces/')
+    parser.add_argument(
+        '--njobs', type=int, default=0, help='Parallel workers (0 = os.cpu_count() // 2).'
+    )
+    parser.add_argument('--bias-csv', default=None, help='Path to batch CSV with bias fit results.')
+    parser.add_argument(
+        '--xmin-bias', type=float, default=15, help='Minimum ndbd_inj for bias fit (default: 15).'
+    )
+    parser.add_argument(
+        '--save-traces',
+        action='store_true',
+        default=False,
+        help='Save per-fit MCMC traces to <output_dir>/traces/',
+    )
 
 
 def _parse_args():
@@ -597,20 +673,22 @@ def _parse_args():
     )
     sub = parser.add_subparsers(dest='subcommand', required=True)
 
-    p_sscl = sub.add_parser('sscl',
-        help='Sigma-scaling: fixed +1σ, one fit per dataset.')
+    p_sscl = sub.add_parser('sscl', help='Sigma-scaling: fixed +1σ, one fit per dataset.')
     _add_common_args(p_sscl)
 
-    p_dq = sub.add_parser('dq',
-        help='Q-residual: N random parameter draws per dataset.')
+    p_dq = sub.add_parser('dq', help='Q-residual: N random parameter draws per dataset.')
     _add_common_args(p_dq)
-    p_dq.add_argument('--n-dq', type=int, default=100,
-                      help='Number of random dq parameter draws (default: 100).')
-    p_dq.add_argument('--dq-seed', type=int, default=None,
-                      help='RNG seed for reproducibility.')
-    p_dq.add_argument('--pm1', action='store_true', default=False,
-                      help='Use fixed ±1σ parameter sets (dqres_1r/dqres_1l) '
-                           'instead of random draws. Ignores --n-dq and --dq-seed.')
+    p_dq.add_argument(
+        '--n-dq', type=int, default=100, help='Number of random dq parameter draws (default: 100).'
+    )
+    p_dq.add_argument('--dq-seed', type=int, default=None, help='RNG seed for reproducibility.')
+    p_dq.add_argument(
+        '--pm1',
+        action='store_true',
+        default=False,
+        help='Use fixed ±1σ parameter sets (dqres_1r/dqres_1l) '
+        'instead of random draws. Ignores --n-dq and --dq-seed.',
+    )
 
     return parser.parse_args()
 

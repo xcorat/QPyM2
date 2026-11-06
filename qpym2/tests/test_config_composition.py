@@ -1,6 +1,6 @@
 import pytest
 from omegaconf import OmegaConf
-from qpym2.cfg.hydra_adapter import get_config, resolve_data_path
+from qpym2.cfg.hydra_adapter import get_config, resolve_data_path, get_cuore_data_root
 from qpym2.cfg.config_builders import (
     build_staging_config,
     build_input_config,
@@ -19,6 +19,9 @@ def test_default_config_composition():
     assert cfg.models.tech_note_200.roi.esum_min == 2400
     assert cfg.models.tech_note_200.roi.esum_max == 2570
     assert cfg.models.tech_note_200.roi.threshold == 200
+    assert cfg.staging.staging_input_root == "cuore_data_root"
+    assert cfg.qroot.output_tree_name == "uvtree"
+    assert cfg.qroot.tree_name == "outTree"
 
 
 def test_staging_config_decoupled_from_roi():
@@ -83,11 +86,13 @@ def test_path_resolution():
     assert get_artifact_store_dir(cfg) == "/data/cuore/Analysis/MC/artifact_store"
     assert get_staging_dir(cfg) == "/data/cuore/Analysis/MC/staging"
     assert get_fit_dir(cfg) == "/data/cuore/Analysis/MC/tech_note/fits"
+    assert get_cuore_data_root(cfg) == "/data/cuore/Analysis/MC"
 
 
 def test_nersc_environment_paths():
     cfg = get_config(environment="nersc")
     assert get_staging_dir(cfg) == "/global/cfs/projectdirs/cuore/scratch/xcorat/data/MC/staging"
+    assert get_cuore_data_root(cfg) == "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
 
 
 def test_model_resolution_strict():

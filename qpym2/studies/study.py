@@ -250,7 +250,15 @@ class Study:
         print(f"Directory: {self.study_dir}")
         print("=" * 70)
 
-        display_cols = ["task_id", "point_id", "co_shift", "output_uuid", "is_fitted", "has_trace", "status"]
+        display_cols = [
+            "task_id",
+            "point_id",
+            "co_shift",
+            "output_uuid",
+            "is_fitted",
+            "has_trace",
+            "status",
+        ]
         avail_cols = [c for c in display_cols if c in status_df.columns]
         print(status_df[avail_cols].to_string(index=False))
 
@@ -258,7 +266,9 @@ class Study:
         if fitted_points == total_points:
             print(f"✓ All {total_points} fits are COMPLETED.")
         else:
-            print(f"⏳ {fitted_points}/{total_points} fits completed ({total_points - fitted_points} pending).")
+            print(
+                f"⏳ {fitted_points}/{total_points} fits completed ({total_points - fitted_points} pending)."
+            )
         print("=" * 70 + "\n")
 
     def run_fits(
@@ -306,23 +316,33 @@ class Study:
             )
             if not force and fit_status.get("is_fitted", False):
                 if verbose:
-                    print(f"[{p.point_id}] Fit {fit_status['output_uuid']} already exists. Skipping.")
+                    print(
+                        f"[{p.point_id}] Fit {fit_status['output_uuid']} already exists. Skipping."
+                    )
                 # Ensure point is recorded in SQLite
-                record_study_point(sqlite_path, {
-                    "point_id": p.point_id,
-                    "task_id": p.task_id,
-                    "model_key": p.model_key,
-                    "co_shift": p.co_shift,
-                    "ndbd_shift": p.ndbd_shift,
-                    "co_cut": str(p.co_cut),
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "task_id": p.task_id,
+                        "model_key": p.model_key,
+                        "co_shift": p.co_shift,
+                        "ndbd_shift": p.ndbd_shift,
+                        "co_cut": str(p.co_cut),
+                        "output_uuid": fit_status["output_uuid"],
+                        "status": "completed",
+                    },
+                )
+                results[p.point_id] = {
+                    "status": "SKIPPED",
                     "output_uuid": fit_status["output_uuid"],
-                    "status": "completed",
-                })
-                results[p.point_id] = {"status": "SKIPPED", "output_uuid": fit_status["output_uuid"]}
+                }
                 continue
 
             if verbose:
-                print(f"[{p.point_id}] Executing fit for output UUID {fit_status['output_uuid']}...")
+                print(
+                    f"[{p.point_id}] Executing fit for output UUID {fit_status['output_uuid']}..."
+                )
 
             fit_res = p.run_fit(
                 cfg=self.cfg,
@@ -431,7 +451,9 @@ class Study:
         records = [p.check_bias_toys(self.study_dir, n_toys=target_n) for p in self.points]
         return pd.DataFrame(records)
 
-    def print_bias_status(self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None) -> None:
+    def print_bias_status(
+        self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None
+    ) -> None:
         """
         Print human-readable summary of bias toy completion across study points.
         """
@@ -506,12 +528,16 @@ class Study:
                 st = p.check_bias_toys(self.study_dir, n_toys=_n_toys)
                 if st["is_completed"]:
                     if verbose:
-                        print(f"[{p.point_id}] Bias toys completed ({st['n_toys_completed']} rows). Skipping.")
+                        print(
+                            f"[{p.point_id}] Bias toys completed ({st['n_toys_completed']} rows). Skipping."
+                        )
                     results[p.point_id] = {"status": "SKIPPED", "task_csv": st["task_csv"]}
                     continue
 
             if verbose:
-                print(f"[{p.point_id}] Running {_n_toys} bias toys (injections in [{_bias_min}, {_bias_max}])...")
+                print(
+                    f"[{p.point_id}] Running {_n_toys} bias toys (injections in [{_bias_min}, {_bias_max}])..."
+                )
 
             csv_path = p.run_bias_toys(
                 cfg=self.cfg,
@@ -602,7 +628,9 @@ class Study:
                     },
                 )
                 if verbose:
-                    print(f"[{p.point_id}] Bias fit: a = {a_val:.4f} +/- {a_err:.4f}, b = {b_val:.4f} +/- {b_err:.4f} (xmin={_xmin})")
+                    print(
+                        f"[{p.point_id}] Bias fit: a = {a_val:.4f} +/- {a_err:.4f}, b = {b_val:.4f} +/- {b_err:.4f} (xmin={_xmin})"
+                    )
             except Exception as e:
                 if verbose:
                     print(f"[WARN] Could not fit bias for point {p.point_id}: {e}")
@@ -612,7 +640,9 @@ class Study:
             json.dump(calibrations, f, indent=2)
 
         if verbose:
-            print(f"[INFO] Saved bias calibration parameters for {len(calibrations)} points: {calib_file}")
+            print(
+                f"[INFO] Saved bias calibration parameters for {len(calibrations)} points: {calib_file}"
+            )
 
         return {"results_df": merged_df, "calibration": calibrations}
 
@@ -629,7 +659,9 @@ class Study:
         records = [p.check_sens_toys(self.study_dir, n_toys=target_n) for p in self.points]
         return pd.DataFrame(records)
 
-    def print_sens_status(self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None) -> None:
+    def print_sens_status(
+        self, df: Optional[pd.DataFrame] = None, n_toys: Optional[int] = None
+    ) -> None:
         """
         Print human-readable summary of sensitivity toy completion across study points.
         """
@@ -700,7 +732,9 @@ class Study:
                 st = p.check_sens_toys(self.study_dir, n_toys=_n_toys)
                 if st["is_completed"]:
                     if verbose:
-                        print(f"[{p.point_id}] Sensitivity toys completed ({st['n_toys_completed']} rows). Skipping.")
+                        print(
+                            f"[{p.point_id}] Sensitivity toys completed ({st['n_toys_completed']} rows). Skipping."
+                        )
                     results[p.point_id] = {"status": "SKIPPED", "task_csv": st["task_csv"]}
                     continue
 
@@ -765,7 +799,9 @@ class Study:
             if cfg_calib:
                 cpath = Path(str(cfg_calib))
                 if not cpath.is_absolute():
-                    cpath = self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+                    cpath = (
+                        self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+                    )
                 if cpath.exists():
                     with open(cpath, "r", encoding="utf-8") as f:
                         calib_dict = json.load(f)
@@ -779,8 +815,16 @@ class Study:
             if point_df.empty:
                 continue
 
-            p90_vals = point_df["ndbd_p90"].dropna().values if "ndbd_p90" in point_df.columns else np.array([])
-            mode_vals = point_df["ndbd_mode"].dropna().values if "ndbd_mode" in point_df.columns else np.array([])
+            p90_vals = (
+                point_df["ndbd_p90"].dropna().values
+                if "ndbd_p90" in point_df.columns
+                else np.array([])
+            )
+            mode_vals = (
+                point_df["ndbd_mode"].dropna().values
+                if "ndbd_mode" in point_df.columns
+                else np.array([])
+            )
 
             if len(p90_vals) == 0:
                 continue
@@ -855,9 +899,639 @@ class Study:
             json.dump(summaries, f, indent=2)
 
         if verbose:
-            print(f"[INFO] Saved sensitivity summary metrics for {len(summaries)} points: {summary_file}")
+            print(
+                f"[INFO] Saved sensitivity summary metrics for {len(summaries)} points: {summary_file}"
+            )
 
         return {"results_df": merged_df, "summary": summaries}
 
+    def check_syst(self, n_samples: Optional[int] = None) -> pd.DataFrame:
+        """
+        Check systematic task completion status across all study points.
+        """
+        scfg = getattr(self.cfg, "syst", None)
+        category = str(getattr(scfg, "category", "bmmc")) if scfg else "bmmc"
+        subcmd = getattr(scfg, "subcommand", None) if scfg else None
+        if category == "lss" and subcmd:
+            category = f"lss_{subcmd}"
 
+        target_n = n_samples
+        if target_n is None and scfg and hasattr(scfg, "n_samples"):
+            target_n = int(scfg.n_samples)
+        if target_n is None:
+            target_n = 100
 
+        datasets = (
+            list(getattr(scfg, "datasets", []))
+            if scfg and hasattr(scfg, "datasets") and scfg.datasets
+            else None
+        )
+        dq_mode = str(getattr(scfg, "dq_mode", "pm1")) if scfg else "pm1"
+
+        records = []
+        for p in self.points:
+            if category in ("lss_sscl", "lss_dq"):
+                records.append(
+                    p.check_syst_lss(
+                        self.study_dir,
+                        category=category,
+                        datasets=datasets,
+                        n_samples=target_n,
+                        dq_mode=dq_mode,
+                    )
+                )
+            elif category in ("bmmc", "mc_stats", "bm_norm"):
+                records.append(p.check_syst_mc(self.study_dir, n_samples=target_n))
+            else:
+                # Fallback for generic syst point
+                records.append(p.check_syst_mc(self.study_dir, n_samples=target_n))
+
+        return pd.DataFrame(records)
+
+    def print_syst_status(
+        self, df: Optional[pd.DataFrame] = None, n_samples: Optional[int] = None
+    ) -> None:
+        """
+        Print human-readable summary of systematic task completion across study points.
+        """
+        status_df = df if df is not None else self.check_syst(n_samples=n_samples)
+        total_points = len(status_df)
+        completed_points = sum(status_df["is_completed"]) if "is_completed" in status_df else 0
+
+        scfg = getattr(self.cfg, "syst", None)
+        category = str(getattr(scfg, "category", "bmmc")) if scfg else "bmmc"
+        subcmd = getattr(scfg, "subcommand", None) if scfg else None
+        if category == "lss" and subcmd:
+            category = f"lss_{subcmd}"
+
+        print("\n" + "=" * 70)
+        print(f"Systematic Study Tasks [{category}]: {self.name} ({total_points} total points)")
+        print(f"Directory: {self.study_dir}")
+        print("=" * 70)
+
+        display_cols = [
+            "task_id",
+            "point_id",
+            "co_shift",
+            "n_samples_completed",
+            "n_samples_target",
+            "is_completed",
+            "status",
+        ]
+        avail_cols = [c for c in display_cols if c in status_df.columns]
+        print(status_df[avail_cols].to_string(index=False))
+
+        print("-" * 70)
+        if completed_points == total_points:
+            print(f"✓ All {total_points} systematic tasks are COMPLETED.")
+        else:
+            print(f"⏳ {completed_points}/{total_points} systematic tasks completed.")
+        print("=" * 70 + "\n")
+
+    def run_syst(
+        self,
+        n_samples: Optional[int] = None,
+        seed: Optional[int] = None,
+        chains: Optional[int] = None,
+        draws: Optional[int] = None,
+        tune: Optional[int] = None,
+        target_accept: Optional[float] = None,
+        stat_only: Optional[bool] = None,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        fit_fn: Optional[Any] = None,
+        save_traces: bool = False,
+        force: bool = False,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Execute systematic fits across all points in the study.
+        """
+        scfg = getattr(self.cfg, "syst", None)
+
+        def _resolve(val, key, default):
+            if val is not None:
+                return val
+            if scfg and hasattr(scfg, key):
+                return getattr(scfg, key)
+            return default
+
+        category = str(_resolve(None, "category", "bmmc"))
+        subcmd = _resolve(None, "subcommand", None)
+        if category == "lss" and subcmd:
+            category = f"lss_{subcmd}"
+
+        _n_samples = int(_resolve(n_samples, "n_samples", 100))
+        _seed = int(_resolve(seed, "seed", 42))
+        _chains = int(_resolve(chains, "chains", 2))
+        _draws = int(_resolve(draws, "draws", 2500))
+        _tune = int(_resolve(tune, "tune", 500))
+        _target_accept = float(_resolve(target_accept, "target_accept", 0.9))
+        _stat_only = bool(_resolve(stat_only, "stat_only", False))
+        _bias_calib = _resolve(bias_calibration, "bias_calibration", None)
+        _datasets = list(_resolve(None, "datasets", [])) or None
+        _dq_mode = str(_resolve(None, "dq_mode", "pm1"))
+
+        results = {}
+        for p in self.points:
+            if not force:
+                if category in ("lss_sscl", "lss_dq"):
+                    st = p.check_syst_lss(
+                        self.study_dir,
+                        category=category,
+                        datasets=_datasets,
+                        n_samples=_n_samples,
+                        dq_mode=_dq_mode,
+                    )
+                else:
+                    st = p.check_syst_mc(self.study_dir, n_samples=_n_samples)
+                if st["is_completed"]:
+                    if verbose:
+                        print(
+                            f"[{p.point_id}] Systematic tasks completed ({st['n_samples_completed']} rows). Skipping."
+                        )
+                    results[p.point_id] = {
+                        "status": "SKIPPED",
+                        "task_csv": st["task_csv"],
+                        "task_h5": st["task_h5"],
+                    }
+                    continue
+
+            if verbose:
+                print(f"[{p.point_id}] Running systematic fits for category '{category}'...")
+
+            if category in ("lss_sscl", "lss_dq"):
+                _lss_data_path = (
+                    getattr(self.cfg.syst, "lss_data_path", None)
+                    if hasattr(self.cfg, "syst")
+                    else None
+                )
+                csv_path, h5_path = p.run_syst_lss(
+                    cfg=self.cfg,
+                    study_dir=self.study_dir,
+                    category=category,
+                    datasets=_datasets,
+                    n_samples=_n_samples,
+                    dq_mode=_dq_mode,
+                    seed=_seed,
+                    lss_data_path=_lss_data_path,
+                    chains=_chains,
+                    draws=_draws,
+                    tune=_tune,
+                    target_accept=_target_accept,
+                    single_core=True,
+                    bias_calibration=_bias_calib,
+                    fit_fn=fit_fn,
+                    save_traces=save_traces,
+                    force=force,
+                    verbose=verbose,
+                )
+            else:
+                csv_path, h5_path = p.run_syst_mc(
+                    cfg=self.cfg,
+                    study_dir=self.study_dir,
+                    n_samples=_n_samples,
+                    seed=_seed,
+                    chains=_chains,
+                    draws=_draws,
+                    tune=_tune,
+                    target_accept=_target_accept,
+                    stat_only=_stat_only,
+                    bias_calibration=_bias_calib,
+                    fit_fn=fit_fn,
+                    save_traces=save_traces,
+                    force=force,
+                    verbose=verbose,
+                )
+            results[p.point_id] = {
+                "status": "COMPLETED",
+                "task_csv": str(csv_path),
+                "task_h5": str(h5_path),
+            }
+
+        return results
+
+    def collect_syst_results(
+        self,
+        bias_calibration: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        nominal_post: Optional[np.ndarray] = None,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Merge systematic task CSVs, combine posterior samples into mixture distributions,
+        calculate mode shifts and 1-sigma HDI edge extensions against nominal,
+        update the study SQLite database, export syst_summary.json, and emit comparison plots.
+        """
+        import json
+        import h5py
+        from qpym2.storage.study import collect_study_results, record_study_point
+        from qpym2.utils.mathy import sample_weighted_mixture, calc_intervals
+        from qpym2.syst.core import compute_deltas
+        from qpym2.fit.bias import apply_bias_correction
+        from qpym2.syst.io import save_syst_result
+        from qpym2.syst.plots import plot_syst_comparison
+        import matplotlib.pyplot as plt
+
+        sqlite_path = self.study_dir / f"{self.name}.sqlite"
+        merged_df = collect_study_results(self.study_dir, self.name)
+        if merged_df.empty:
+            if verbose:
+                print(f"[WARN] No systematic task CSV results found in {self.study_dir}/tasks.")
+            return {"results_df": merged_df, "summary": {}}
+
+        scfg = getattr(self.cfg, "syst", None)
+        category = str(getattr(scfg, "category", "bmmc")) if scfg else "bmmc"
+        subcmd = getattr(scfg, "subcommand", None) if scfg else None
+        if category == "lss" and subcmd:
+            category = f"lss_{subcmd}"
+
+        # Resolve bias calibration if available
+        calib_dict: Dict[str, Any] = {}
+        if isinstance(bias_calibration, dict):
+            calib_dict = bias_calibration
+        elif bias_calibration is not None:
+            cpath = Path(bias_calibration)
+            if not cpath.is_absolute():
+                cpath = self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+            if cpath.exists():
+                with open(cpath, "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+        else:
+            cfg_calib = getattr(scfg, "bias_calibration", None) if scfg else None
+            if cfg_calib:
+                cpath = Path(str(cfg_calib))
+                if not cpath.is_absolute():
+                    cpath = (
+                        self.study_dir / cpath if (self.study_dir / cpath).exists() else Path(cpath)
+                    )
+                if cpath.exists():
+                    with open(cpath, "r", encoding="utf-8") as f:
+                        calib_dict = json.load(f)
+            elif (self.study_dir / "bias_calibration.json").exists():
+                with open(self.study_dir / "bias_calibration.json", "r", encoding="utf-8") as f:
+                    calib_dict = json.load(f)
+
+        plots_dir = self.study_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
+        summaries: Dict[str, Any] = {}
+        for p in self.points:
+            point_df = merged_df[merged_df["point_id"] == p.point_id].copy()
+            if point_df.empty:
+                continue
+
+            if category in ("lss_sscl", "lss_dq"):
+                # Resolve nominal posterior
+                nom_post_raw = None
+                if nominal_post is not None:
+                    nom_post_raw = np.asarray(nominal_post).flatten()
+                else:
+                    try:
+                        fit_info = p.get_fit_hash(self.cfg)
+                        fit_prefix = fit_info["fit_prefix"]
+                        nc_path = fit_prefix.with_suffix(".nc")
+                        if nc_path.exists():
+                            import arviz as az
+
+                            nom_trace = az.from_netcdf(str(nc_path))
+                            nom_post_raw = nom_trace.posterior["ndbd"].values.flatten()
+                    except Exception:
+                        pass
+
+                # Resolve calibration parameters
+                p_calib = calib_dict.get(p.point_id)
+                if not p_calib:
+                    for ck, cv in calib_dict.items():
+                        if isinstance(cv, dict) and cv.get("co_shift") == p.co_shift:
+                            p_calib = cv
+                            break
+
+                popt = None
+                if p_calib and "a" in p_calib and "b" in p_calib:
+                    popt = (float(p_calib["a"]), float(p_calib["b"]))
+
+                use_bc = (
+                    popt is not None
+                    and "ndbd_mode_bc" in point_df.columns
+                    and not point_df["ndbd_mode_bc"].isna().all()
+                )
+                mode_col = "ndbd_mode_bc" if use_bc else "ndbd_mode"
+                p16_col = "ndbd_p16_bc" if use_bc else "ndbd_p16"
+                p90_col = "ndbd_p90_bc" if use_bc else "ndbd_p90"
+
+                if nom_post_raw is not None:
+                    nom_post_eval = (
+                        apply_bias_correction(nom_post_raw, popt)
+                        if popt is not None
+                        else nom_post_raw
+                    )
+                    mode_nom, lo_nom, hi_nom = calc_intervals([nom_post_eval], method="hdi")[0]
+                else:
+                    mode_nom = float(point_df[mode_col].iloc[0])
+                    lo_nom = float(point_df[p16_col].iloc[0])
+                    hi_nom = float(point_df[p90_col].iloc[0])
+
+                from qpym2.utils.mathy import signed_quad_sum
+                from qpym2.syst.plots import plot_lss_sscl_barplot, plot_lss_dq_barplot
+
+                if category == "lss_sscl":
+                    point_df["delta_mode"] = point_df[mode_col] - mode_nom
+                    point_df["delta_lo"] = point_df[p16_col] - lo_nom
+                    point_df["delta_hi"] = point_df[p90_col] - hi_nom
+
+                    deltas = point_df["delta_mode"].values
+                    sigma_plus, sigma_minus = signed_quad_sum(deltas)
+                    delta_right = float(sigma_plus)
+                    delta_left = -float(sigma_minus)
+                    delta_mode = float(np.mean(deltas))
+
+                    syst_h5 = self.study_dir / f"syst_lss_sscl_{p.point_id}.h5"
+                    per_post = point_df.copy()
+
+                    plot_path = plots_dir / f"lss_sscl_barplot_{p.point_id}.png"
+                    try:
+                        fig, _ = plot_lss_sscl_barplot(
+                            ds_ids=point_df["ds"].values,
+                            dlo=point_df["delta_lo"].values,
+                            dhi=point_df["delta_hi"].values,
+                            deltas=(delta_left, delta_right),
+                            co_shift=p.co_shift,
+                        )
+                        fig.savefig(plot_path, dpi=150, bbox_inches="tight")
+                        plt.close(fig)
+                    except Exception as e:
+                        if verbose:
+                            print(f"[{p.point_id}] Note: could not render LSS plot ({e})")
+
+                else:  # lss_dq
+                    datasets_in_point = sorted(point_df["ds"].unique())
+                    dpos_list = []
+                    dneg_list = []
+                    dlo_1r, dhi_1r, dlo_1l, dhi_1l = [], [], [], []
+
+                    for ds_val in datasets_in_point:
+                        df_ds = point_df[point_df["ds"] == ds_val]
+                        r1_rows = df_ds[df_ds["variant"] == "dqres_1r"]
+                        l1_rows = df_ds[df_ds["variant"] == "dqres_1l"]
+
+                        if not r1_rows.empty and not l1_rows.empty:
+                            d1r = float(r1_rows[mode_col].iloc[0] - mode_nom)
+                            d1l = float(l1_rows[mode_col].iloc[0] - mode_nom)
+                            dpos = max(d1r, d1l, 0.0)
+                            dneg = min(d1r, d1l, 0.0)
+                            dpos_list.append(dpos)
+                            dneg_list.append(dneg)
+
+                            dlo_1r.append(float(r1_rows[p16_col].iloc[0] - lo_nom))
+                            dhi_1r.append(float(r1_rows[p90_col].iloc[0] - hi_nom))
+                            dlo_1l.append(float(l1_rows[p16_col].iloc[0] - lo_nom))
+                            dhi_1l.append(float(l1_rows[p90_col].iloc[0] - hi_nom))
+                        else:
+                            ds_deltas = (df_ds[mode_col] - mode_nom).values
+                            dpos_list.append(max(float(np.max(ds_deltas)), 0.0))
+                            dneg_list.append(min(float(np.min(ds_deltas)), 0.0))
+                            dlo_1r.append(0.0)
+                            dhi_1r.append(0.0)
+                            dlo_1l.append(0.0)
+                            dhi_1l.append(0.0)
+
+                    delta_right = float(np.sqrt(np.sum(np.array(dpos_list) ** 2)))
+                    delta_left = -float(np.sqrt(np.sum(np.array(dneg_list) ** 2)))
+                    delta_mode = float(np.mean(dpos_list) + np.mean(dneg_list))
+
+                    syst_h5 = self.study_dir / f"syst_lss_dq_{p.point_id}.h5"
+                    per_post = point_df.copy()
+
+                    plot_path = plots_dir / f"lss_dq_barplot_{p.point_id}.png"
+                    try:
+                        fig, _ = plot_lss_dq_barplot(
+                            ds_ids=datasets_in_point,
+                            dlo_1r=np.array(dlo_1r),
+                            dhi_1r=np.array(dhi_1r),
+                            dlo_1l=np.array(dlo_1l),
+                            dhi_1l=np.array(dhi_1l),
+                            deltas=(delta_left, delta_right),
+                            co_shift=p.co_shift,
+                        )
+                        fig.savefig(plot_path, dpi=150, bbox_inches="tight")
+                        plt.close(fig)
+                    except Exception as e:
+                        if verbose:
+                            print(f"[{p.point_id}] Note: could not render dQ plot ({e})")
+
+                summary_entry = {
+                    "point_id": p.point_id,
+                    "task_id": p.task_id,
+                    "category": category,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                    "co_cut": str(p.co_cut),
+                    "ndbd_cutoff": str(p.ndbd_cutoff),
+                    "n_samples": len(point_df),
+                    "mode_nom": float(mode_nom),
+                    "delta_mode": float(delta_mode),
+                    "delta_right": float(delta_right),
+                    "delta_left": float(delta_left),
+                }
+                if popt is not None:
+                    summary_entry["bc_a"] = popt[0]
+                    summary_entry["bc_b"] = popt[1]
+
+                summaries[p.point_id] = summary_entry
+
+                model_pars = {
+                    "co_cut": p.co_cut,
+                    "ndbd_cutoff": p.ndbd_cutoff,
+                    "co_shift": p.co_shift,
+                    "ndbd_shift": p.ndbd_shift,
+                }
+                save_syst_result(
+                    syst_h5,
+                    name=category,
+                    per_post=per_post,
+                    model_pars=model_pars,
+                    overwrite=True,
+                )
+
+                record_study_point(
+                    sqlite_path,
+                    {
+                        "point_id": p.point_id,
+                        "study_name": self.name,
+                        "task_id": p.task_id,
+                        "status": "completed",
+                        "summary_json": summary_entry,
+                    },
+                )
+
+                if verbose:
+                    print(
+                        f"[{p.point_id}] {category.upper()} Systematic: "
+                        f"Δright = {delta_right:+.2f}, "
+                        f"Δleft = {delta_left:+.2f} "
+                        f"(mode_nom={mode_nom:.2f})"
+                    )
+                continue
+
+            task_h5 = self.study_dir / "tasks" / f"syst_mc_{p.point_id}_samples.h5"
+            if not task_h5.exists():
+                continue
+
+            with h5py.File(task_h5, "r") as h5f:
+                ndbd_samples = h5f["ndbd_samples"][:]
+                max_logp = h5f["max_logp"][:]
+
+            if len(ndbd_samples) == 0:
+                continue
+
+            # Compute likelihood weights via softmax
+            scores = max_logp - np.max(max_logp)
+            weights = np.exp(scores)
+            weights[weights < 1e-10] = 0.0
+            if weights.sum() > 0:
+                weights = weights / weights.sum()
+            else:
+                weights = np.full(len(max_logp), 1.0 / len(max_logp))
+
+            rng = np.random.default_rng(42)
+            combined_samples = sample_weighted_mixture(
+                ndbd_samples, weights, n_draws=50000, rng=rng
+            )
+
+            # Resolve nominal posterior
+            nom_post_raw = None
+            if nominal_post is not None:
+                nom_post_raw = np.asarray(nominal_post).flatten()
+            else:
+                # Try reading from storage fit cache
+                try:
+                    fit_info = p.get_fit_hash(self.cfg)
+                    fit_prefix = fit_info["fit_prefix"]
+                    nc_path = fit_prefix.with_suffix(".nc")
+                    if nc_path.exists():
+                        import arviz as az
+
+                        nom_trace = az.from_netcdf(str(nc_path))
+                        nom_post_raw = nom_trace.posterior["ndbd"].values.flatten()
+                except Exception:
+                    pass
+
+            # Fallback if nominal fit not yet on disk: use point's 0th sample or unweighted mean
+            if nom_post_raw is None:
+                nom_post_raw = ndbd_samples[0]
+
+            # Resolve calibration parameters
+            p_calib = calib_dict.get(p.point_id)
+            if not p_calib:
+                for ck, cv in calib_dict.items():
+                    if isinstance(cv, dict) and cv.get("co_shift") == p.co_shift:
+                        p_calib = cv
+                        break
+
+            popt = None
+            if p_calib and "a" in p_calib and "b" in p_calib:
+                popt = (float(p_calib["a"]), float(p_calib["b"]))
+
+            if popt is not None:
+                nom_bc = apply_bias_correction(nom_post_raw, popt)
+                syst_bc = apply_bias_correction(combined_samples, popt)
+            else:
+                nom_bc = nom_post_raw
+                syst_bc = combined_samples
+
+            mode_nom, lo_nom, hi_nom = calc_intervals([nom_bc], method="hdi")[0]
+            mode_syst, lo_syst, hi_syst = calc_intervals([syst_bc], method="hdi")[0]
+            deltas = compute_deltas(nom_bc, syst_bc, return_extensions_only=True)
+            delta_left = float(deltas[0])  # <= 0
+            delta_right = float(deltas[1])  # >= 0
+            delta_mode = float(mode_syst - mode_nom)
+
+            summary_entry = {
+                "point_id": p.point_id,
+                "task_id": p.task_id,
+                "category": "bmmc",
+                "co_shift": p.co_shift,
+                "ndbd_shift": p.ndbd_shift,
+                "co_cut": str(p.co_cut),
+                "ndbd_cutoff": str(p.ndbd_cutoff),
+                "n_samples": len(point_df),
+                "mode_nom": float(mode_nom),
+                "mode_syst": float(mode_syst),
+                "delta_mode": float(delta_mode),
+                "hdi_nom": [float(lo_nom), float(hi_nom)],
+                "hdi_syst": [float(lo_syst), float(hi_syst)],
+                "delta_right": float(delta_right),
+                "delta_left": float(delta_left),
+            }
+            if popt is not None:
+                summary_entry["bc_a"] = popt[0]
+                summary_entry["bc_b"] = popt[1]
+
+            summaries[p.point_id] = summary_entry
+
+            # Save per-systematic Format v2 HDF5 result
+            syst_h5 = self.study_dir / f"syst_bmmc_{p.point_id}.h5"
+            model_pars = {
+                "co_cut": p.co_cut,
+                "ndbd_cutoff": p.ndbd_cutoff,
+                "co_shift": p.co_shift,
+                "ndbd_shift": p.ndbd_shift,
+            }
+            save_syst_result(
+                syst_h5,
+                name="bmmc",
+                bc_post=syst_bc,
+                raw_post=combined_samples,
+                model_pars=model_pars,
+                per_post=point_df,
+                overwrite=True,
+            )
+
+            # Record in SQLite
+            record_study_point(
+                sqlite_path,
+                {
+                    "point_id": p.point_id,
+                    "study_name": self.name,
+                    "task_id": p.task_id,
+                    "status": "completed",
+                    "summary_json": summary_entry,
+                },
+            )
+
+            # Generate diagnostic plot
+            plot_path = plots_dir / f"bmmc_comparison_{p.point_id}.png"
+            try:
+                fig, _ = plot_syst_comparison(
+                    nominal_bc=nom_bc,
+                    syst_post=syst_bc,
+                    delta=delta_mode,
+                    deltas=[delta_left, delta_right, delta_mode],
+                    syst_label="BM-MC",
+                    nom_label="Nominal",
+                    title=f"BM-MC Systematic ({p.point_id})",
+                )
+                fig.savefig(plot_path, dpi=150, bbox_inches="tight")
+                plt.close(fig)
+            except Exception as e:
+                if verbose:
+                    print(f"[{p.point_id}] Note: could not render plot ({e})")
+
+            if verbose:
+                print(
+                    f"[{p.point_id}] BM-MC Systematic: "
+                    f"Δmode = {delta_mode:+.2f}, "
+                    f"Δright = {delta_right:+.2f}, "
+                    f"Δleft = {delta_left:+.2f} "
+                    f"(mode_nom={mode_nom:.2f}, mode_syst={mode_syst:.2f})"
+                )
+
+        summary_file = self.study_dir / "syst_summary.json"
+        with open(summary_file, "w", encoding="utf-8") as f:
+            json.dump(summaries, f, indent=2)
+
+        if verbose:
+            print(
+                f"[INFO] Saved systematic summary metrics for {len(summaries)} points: {summary_file}"
+            )
+
+        return {"results_df": merged_df, "summary": summaries}

@@ -1,0 +1,27 @@
+{
+  "nominal": {
+    "point_id": "nominal",
+    "task_id": 0,
+    "category": "bmmc",
+    "co_shift": 1.0,
+    "ndbd_shift": 0.0,
+    "co_cut": "gamma10_v150",
+    "ndbd_cutoff": "u1740",
+    "n_samples": 5,
+    "mode_nom": 8.165299193951176,
+    "mode_syst": 10.891203735190244,
+    "delta_mode": 2.7259045412390677,
+    "hdi_nom": [
+      4.389533893800761,
+      16.10683210364148
+    ],
+    "hdi_syst": [
+      4.606717270519862,
+      16.958162495043414
+    ],
+    "delta_right": 0.8513303914019339,
+    "delta_left": 0.0,
+    "bc_a": 1.0178877904678634,
+    "bc_b": -4.442987618321653
+  }
+}

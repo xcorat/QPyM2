@@ -118,6 +118,10 @@ def parse_args():
         help="Overwrite existing fit results even if cached",
     )
     parser.add_argument(
+        "--suffix", default=None,
+        help="Optional filename suffix for fit output (e.g. d40k -> fit_<UUID>_d40k.h5)",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", default=False,
         help="Inspect parameters, output UUID, and cache status without sampling",
     )
@@ -139,6 +143,7 @@ def run_single_storage_fit(
     chains: int = 8,
     draws: int = 20000,
     tune: int = 1000,
+    suffix: Optional[str] = None,
     single_core: bool = False,
     save_trace: bool = False,
     study_dir: Optional[Union[str, Path]] = None,
@@ -167,6 +172,7 @@ def run_single_storage_fit(
         chains=chains,
         draws=draws,
         tune=tune,
+        suffix=suffix,
         dry_run=dry_run,
     )
 
@@ -299,6 +305,7 @@ def main():
         chains=args.chains,
         draws=args.draws,
         tune=args.tune,
+        suffix=args.suffix,
         single_core=args.single_core,
         save_trace=args.save_trace,
         study_dir=args.study_dir,

@@ -8,6 +8,7 @@ docs/ai/reviews/2026-10-29-data-storage-review.md.
 from qpym2.storage.schema import (
     normalize_float,
     normalize_cut_string,
+    normalize_mcmc_dict,
     build_template_hash_dict,
     build_fit_hash_dict,
 )
@@ -63,6 +64,7 @@ __all__ = [
     # Schema
     "normalize_float",
     "normalize_cut_string",
+    "normalize_mcmc_dict",
     "build_template_hash_dict",
     "build_fit_hash_dict",
     # Hasher

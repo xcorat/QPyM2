@@ -8,6 +8,7 @@ defaults:
 
 infrastructure:
   data_root: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
+  cuore_data_root: "/global/cfs/projectdirs/cuore/scratch/xcorat/data"
   directories:
     bm_dir: "BM_1ton"
     ndbd_mc_dir: "MC/ares/0vbb"

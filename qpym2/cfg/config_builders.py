@@ -105,12 +105,16 @@ def build_staging_config(cfg: DictConfig, model_key: Optional[str] = None) -> Di
         s_cuts.get('broad_preselection'),
     )
 
+    qroot = getattr(cfg, 'qroot', None) or getattr(cfg.staging, 'qroot', None)
+    if qroot is None:
+        raise ValueError("No qroot definition found in cfg or cfg.staging.")
+
     raw_outpath = cfg.infrastructure.output_paths.staging_dir
 
     return {
         'outpath': resolve_data_path(cfg, raw_outpath),
-        'treename': cfg.qroot.output_tree_name,
-        'out_cols': list(cfg.qroot.output_columns),
+        'treename': qroot.output_tree_name,
+        'out_cols': list(qroot.output_columns),
         'cuts': cuts
     }
 
@@ -132,15 +136,17 @@ def build_mc_config(cfg: DictConfig) -> Dict[str, Any]:
     base_cuts = cfg.cuts.get('base_cuts', 'true') if hasattr(cfg, 'cuts') else 'true'
     mc_cuts = cfg.cuts.get('mc_cuts', None) if hasattr(cfg, 'cuts') else None
 
+    input_root_key = getattr(getattr(cfg, 'staging', None), 'staging_input_root', 'cuore_data_root')
     raw_inpath = cfg.infrastructure.directories.bkg_mc_dir
+    qroot = getattr(cfg, 'qroot', None) or getattr(cfg.staging, 'qroot', None)
 
     return {
-        'inpath': resolve_data_path(cfg, raw_inpath),
-        'treename': cfg.qroot.tree_name,
-        'evar': cfg.qroot.energy_var,
-        'esum_var': cfg.qroot.esum_var,
-        'ch1': cfg.qroot.channel_vars[0],
-        'ch2': cfg.qroot.channel_vars[1],
+        'inpath': resolve_data_path(cfg, raw_inpath, root_key=input_root_key),
+        'treename': qroot.tree_name,
+        'evar': qroot.energy_var,
+        'esum_var': qroot.esum_var,
+        'ch1': qroot.channel_vars[0],
+        'ch2': qroot.channel_vars[1],
         'ds': 'Dataset',
         't': 'Time',
         'extra_cuts': _merge_cuts(multiplicity_cut, base_cuts, mc_cuts)
@@ -171,17 +177,19 @@ def build_ndbd_config(cfg: DictConfig, model_key: Optional[str] = None) -> Dict[
     mc_cuts = cfg.cuts.get('mc_cuts', None) if hasattr(cfg, 'cuts') else None
 
     ndbd = cfg.staging.sources.ndbd_mc
+    input_root_key = getattr(getattr(cfg, 'staging', None), 'staging_input_root', 'cuore_data_root')
     raw_inpath = cfg.infrastructure.directories.ndbd_mc_dir
+    qroot = getattr(cfg, 'qroot', None) or getattr(cfg.staging, 'qroot', None)
 
     return {
-        'inpath': resolve_data_path(cfg, raw_inpath),
+        'inpath': resolve_data_path(cfg, raw_inpath, root_key=input_root_key),
         'fname': ndbd.pattern,
         'out_fname': ndbd.out_fname,
-        'treename': cfg.qroot.tree_name,
-        'evar': cfg.qroot.energy_var,
-        'esum_var': cfg.qroot.esum_var,
-        'ch1': cfg.qroot.channel_vars[0],
-        'ch2': cfg.qroot.channel_vars[1],
+        'treename': qroot.tree_name,
+        'evar': qroot.energy_var,
+        'esum_var': qroot.esum_var,
+        'ch1': qroot.channel_vars[0],
+        'ch2': qroot.channel_vars[1],
         'ds': 'Dataset',
         't': 'Time',
         'extra_cuts': _merge_cuts(multiplicity_cut, base_cuts, mc_cuts)
@@ -213,20 +221,22 @@ def build_data_config(
     data_cuts = cfg.cuts.get('data_cuts', None) if hasattr(cfg, 'cuts') else None
 
     s_data = cfg.staging.sources.data
+    input_root_key = getattr(getattr(cfg, 'staging', None), 'staging_input_root', 'cuore_data_root')
     raw_inpath = cfg.infrastructure.directories.bm_dir
     reduced_fname = cfg.infrastructure.data_files.reduced_data
+    qroot = getattr(cfg, 'qroot', None) or getattr(cfg.staging, 'qroot', None)
 
     out_fname = s_data.out_blinded_fname if blinded else s_data.out_fname
 
     return {
-        'inpath': resolve_data_path(cfg, raw_inpath),
+        'inpath': resolve_data_path(cfg, raw_inpath, root_key=input_root_key),
         'fname': reduced_fname,
         'out_fname': out_fname,
-        'treename': cfg.qroot.tree_name,
-        'evar': cfg.qroot.energy_var,
-        'esum_var': cfg.qroot.esum_var,
-        'ch1': cfg.qroot.channel_vars[0],
-        'ch2': cfg.qroot.channel_vars[1],
+        'treename': qroot.tree_name,
+        'evar': qroot.energy_var,
+        'esum_var': qroot.esum_var,
+        'ch1': qroot.channel_vars[0],
+        'ch2': qroot.channel_vars[1],
         'ds': 'Dataset',
         't': 'Time',
         'extra_cuts': _merge_cuts(multiplicity_cut, base_cuts, data_cuts)
@@ -235,7 +245,9 @@ def build_data_config(
 
 def get_jags_path(cfg: DictConfig) -> str:
     """Extract JAGS HDF5 file path from Hydra config."""
-    return resolve_data_path(cfg, cfg.infrastructure.data_files.jags_output)
+    df = getattr(cfg.infrastructure, 'data_files', None)
+    raw = getattr(df, 'jags_output', None) or getattr(df, 'bkg_model_jags', None)
+    return resolve_data_path(cfg, raw)
 
 
 def get_data_names(cfg: DictConfig) -> Tuple[str, str]:
@@ -265,9 +277,12 @@ def build_input_config(cfg: DictConfig, model_key: Optional[str] = "default") ->
     resolved_key = _get_model_key(cfg, model_key)
     model = cfg.models[resolved_key]
 
+    qroot = getattr(cfg, 'qroot', None) or getattr(cfg.staging, 'qroot', None)
+    treename = qroot.output_tree_name if qroot is not None else "uvtree"
+
     return {
         'outpath': staging_dir,
-        'treename': cfg.qroot.output_tree_name,
+        'treename': treename,
         'data_fname': f"{cfg.infrastructure.naming_conventions.data_name}.root",
         'roi': OmegaConf.to_container(model.roi, resolve=True),
         'binning': OmegaConf.to_container(model.binning, resolve=True),

@@ -54,10 +54,14 @@ def mock_cfg(tmp_path):
         },
         "models": {
             "tech_note_200": {
-                "esum_min": 2400.0,
-                "esum_max": 2570.0,
-                "threshold": 200.0,
-                "bin_size": 2.5,
+                "roi": {
+                    "esum_min": 2400.0,
+                    "esum_max": 2570.0,
+                    "threshold": 200.0,
+                },
+                "binning": {
+                    "bin_size": 2.5,
+                },
                 "coord_type": "h2uv",
                 "smooth": [1.2, 1.2],
             }
@@ -117,15 +121,20 @@ def test_build_fit_hash_determinism():
     assert uuid1 == uuid2
     assert len(uuid1) == 12
 
-    # Changing draws changes output UUID
-    mcmc_mod = {"chains": 8, "draws": 10000, "tune": 1000}
+    # Decoupled MCMC: Changing draws/chains preserves output UUID (same mathematical target)
+    mcmc_mod = {"chains": 4, "draws": 40000, "tune": 2000}
     _, uuid_mod_draws = build_fit_hash("m2", "data", templates, smoothing, priors, None, mcmc_mod)
-    assert uuid_mod_draws != uuid1
+    assert uuid_mod_draws == uuid1
 
     # Changing Co-60 input UUID changes output UUID
     templates_shifted = dict(templates, co60="uuid_co_different")
     _, uuid_shifted = build_fit_hash("m2", "data", templates_shifted, smoothing, priors, None, mcmc)
     assert uuid_shifted != uuid1
+
+    # Changing priors changes output UUID
+    priors_mod = {"prior_width": "syst", "sigma_scale": 1.0}
+    _, uuid_mod_priors = build_fit_hash("m2", "data", templates, smoothing, priors_mod, None, mcmc)
+    assert uuid_mod_priors != uuid1
 
 
 def test_fit_template_assembly_mock(tmp_path):
@@ -219,3 +228,41 @@ def test_fit_write_and_read_roundtrip(tmp_path):
     assert np.allclose(table_read["integral"].values, [120.0, 45.0])
     assert len(data_read) == 3
     assert meta_read["output_uuid"] == "test123456"
+
+
+def test_setup_storage_fit_suffix_and_cache_quality(mock_cfg, tmp_path):
+    """Test suffix support and quality-aware caching in setup_storage_fit."""
+    from qpym2.storage.fits import setup_storage_fit
+
+    # 1. Suffix creates distinct prefix but identical output_uuid
+    res_nosuffix = setup_storage_fit(mock_cfg, model_key="tech_note_200", dry_run=True)
+    res_suffix = setup_storage_fit(mock_cfg, model_key="tech_note_200", suffix="d40k", dry_run=True)
+
+    assert res_nosuffix["output_uuid"] == res_suffix["output_uuid"]
+    assert str(res_suffix["fit_prefix"]).endswith(f"fit_{res_suffix['output_uuid']}_d40k")
+    assert str(res_nosuffix["fit_prefix"]).endswith(f"fit_{res_nosuffix['output_uuid']}")
+    assert res_suffix["fit_params"]["suffix"] == "d40k"
+
+    # 2. Quality-aware caching: write existing fit with 1000 draws
+    out_dir = res_nosuffix["output_dir"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    prefix = res_nosuffix["fit_prefix"]
+
+    comps_df = pd.DataFrame({"integral": [10.0]}, index=["ndbd"])
+    meta = {
+        "output_uuid": res_nosuffix["output_uuid"],
+        "mcmc": {"draws": 1000, "chains": 4},
+    }
+    write_fit(prefix, table=comps_df, metadata=meta)
+
+    # Requesting 2000 draws should detect lower cached quality -> is_cached=False
+    check_high = setup_storage_fit(
+        mock_cfg, model_key="tech_note_200", draws=2000, chains=4, dry_run=True
+    )
+    assert check_high["is_cached"] is False
+
+    # Requesting 500 draws should detect sufficient quality -> is_cached=True
+    check_low = setup_storage_fit(
+        mock_cfg, model_key="tech_note_200", draws=500, chains=4, dry_run=True
+    )
+    assert check_low["is_cached"] is True

@@ -18,6 +18,7 @@ from .hydra_adapter import (
     resolve_path,
     resolve_repo_path,
     get_data_root,
+    get_cuore_data_root,
     get_repo_root,
 )
 from .config_builders import (
@@ -55,6 +56,7 @@ __all__ = [
     "resolve_path",
     "resolve_repo_path",
     "get_data_root",
+    "get_cuore_data_root",
     "get_repo_root",
     "build_staging_config",
     "build_input_config",

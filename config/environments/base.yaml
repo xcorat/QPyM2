@@ -13,8 +13,9 @@
 
 infrastructure:
   data_root: null
+  cuore_data_root: null  # Machine location of raw CUORE data / MC for staging creation (defaults to data_root)
 
-  # Raw input directories (relative to data_root).
+  # Raw input directories (relative to cuore_data_root or data_root).
   directories:
     bm_dir: "BM_1ton"
     ndbd_mc_dir: "MC/ares/0vbb"
@@ -45,14 +46,6 @@ infrastructure:
     data_blinded_name: "data_blinded"
     input_name: "input"
     input_noroi_name: "input_noroi"
-
-qroot:
-  tree_name: "outTree"
-  energy_var: "Energy"
-  esum_var: "TotalEnergy"
-  channel_vars: ["Channel", "Multiplet[1]"]
-  output_tree_name: "uvtree"
-  output_columns: ["u0", "v0", "ch1", "ch2", "ds", "t"]
 
 system:
   matplotlib_backend: "Agg"

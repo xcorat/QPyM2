@@ -69,6 +69,8 @@ python -m qpym2.run.run_single_storage_fit -e local -a base -m tech_note_200 --c
 python -m qpym2.run.run_study --study-dir studies/example_co_shift --check-inputs
 python -m qpym2.run.run_study --study-dir studies/example_bias_study --check-bias
 python -m qpym2.run.run_study --study-dir studies/example_sens_study --check-sens
+python -m qpym2.run.run_study --study-dir studies/example_lss_sscl_study --check-syst
+python -m qpym2.run.run_study --study-dir studies/example_lss_dq_study --check-syst
 python -m qpym2.run.run_single_fit -e m2v5-1 -a tech_note \
     --co-cut None --ndbd-cutoff None --co-shift 0.0 --chains 8 --draws 20000
 python -m qpym2.run.run_fits -p scripts/params/fit_params.tsv --dry-run
@@ -112,7 +114,8 @@ split into:
 - Pure (no data/ROOT): `qpym2/tests/test_staging_transforms.py`,
   `test_make_fik_digitize.py`, `test_fit_syst.py`, `test_hydra_adapter.py`,
   `test_config_composition.py`, `test_storage.py`, `test_storage_fit.py`,
-  `test_storage_inputs.py`, `test_studies.py`.
+  `test_storage_inputs.py`, `test_studies.py`, `test_study_bias.py`,
+  `test_study_sens.py`, `test_study_mc_syst.py`, `test_study_lss_syst.py`.
 - Integration (`@pytest.mark.integration`): need real config + `/global/...`
   data — `qpym2/tests/test_run_fits.py`.
 

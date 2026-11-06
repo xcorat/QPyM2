@@ -24,6 +24,7 @@ from qpym2.io.bkg_model import get_mcsyst_samples, read_jagsh5, read_mkchain
 from qpym2.models import m2
 from qpym2.storage.backend import (
     fit_exists,
+    read_hdf5_metadata,
     read_observed_data,
     read_template,
 )
@@ -267,6 +268,7 @@ def setup_storage_fit(
     tune: int = 1000,
     target_accept: float = 0.9,
     study_context: Optional[Dict[str, Any]] = None,
+    suffix: Optional[str] = None,
     model_name: str = 'm2',
     mksamples: Optional[pd.DataFrame] = None,
     read_jagsh5_fn: Optional[Any] = None,
@@ -286,7 +288,7 @@ def setup_storage_fit(
         - coords, param_dir, input_dir, output_dir
         - output_uuid, fit_prefix, h5_path, nc_path
         - fit_params (metadata dictionary)
-        - is_cached (bool: whether fit_<output_UUID>.h5 already exists)
+        - is_cached (bool: whether fit output already exists with sufficient quality)
         - pymc_model, fit_comps, data, edges
     """
     coords, hm, param_dir, input_dir = resolve_storage_coords(cfg, model_key=model_key)
@@ -345,10 +347,31 @@ def setup_storage_fit(
         study_context=study_context,
     )
 
-    fit_prefix = out_dir / f"fit_{output_uuid}"
+    # Package MCMC and execution options into metadata persisted to file
+    metadata = dict(fit_params)
+    metadata['mcmc'] = mcmc_cfg
+    metadata['output_uuid'] = output_uuid
+    if suffix:
+        metadata['suffix'] = suffix
+
+    if suffix:
+        fit_prefix = out_dir / f"fit_{output_uuid}_{suffix}"
+    else:
+        fit_prefix = out_dir / f"fit_{output_uuid}"
+
     h5_path = fit_prefix.with_suffix('.h5')
     nc_path = fit_prefix.with_suffix('.nc')
     cached = fit_exists(fit_prefix)
+    if cached and h5_path.exists():
+        try:
+            cached_meta = read_hdf5_metadata(h5_path)
+            cached_mcmc = cached_meta.get('mcmc', {})
+            cached_draws = cached_mcmc.get('draws', 0)
+            cached_chains = cached_mcmc.get('chains', 0)
+            if cached_draws < draws or cached_chains < chains:
+                cached = False
+        except Exception:
+            pass
 
     if dry_run:
         return {
@@ -365,7 +388,7 @@ def setup_storage_fit(
             'h5_path': h5_path,
             'nc_path': nc_path,
             'is_cached': cached,
-            'fit_params': fit_params,
+            'fit_params': metadata,
             'pymc_model': None,
             'fit_comps': None,
             'data': None,
@@ -438,7 +461,7 @@ def setup_storage_fit(
         'h5_path': h5_path,
         'nc_path': nc_path,
         'is_cached': cached,
-        'fit_params': fit_params,
+        'fit_params': metadata,
         'pymc_model': pymc_model,
         'fit_comps': fit_comps,
         'data': data_events,
