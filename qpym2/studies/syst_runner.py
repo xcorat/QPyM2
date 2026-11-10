@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Union
 import pandas as pd
 
 from qpym2.storage.study import collect_study_results
-from qpym2.studies import syst_bm, syst_lss, syst_mc, syst_template
+from qpym2.studies import syst_bm, syst_co_shift, syst_lss, syst_mc, syst_template
 
 
 def _resolve_category(cfg: Any) -> str:
@@ -39,6 +39,9 @@ def check_syst(study: Any, n_samples: Optional[int] = None) -> pd.DataFrame:
     dq_mode = str(getattr(scfg, "dq_mode", "pm1")) if scfg else "pm1"
 
     records = []
+    if category in ("co_shift", "co_marg", "co_marginalization"):
+        return syst_co_shift.check_syst_co_shift(study)
+
     for p in study.points:
         if category in ("lss_sscl", "lss_dq"):
             records.append(
@@ -140,6 +143,17 @@ def run_syst(
     _bias_calib = _resolve(bias_calibration, "bias_calibration", None)
     _datasets = list(_resolve(None, "datasets", [])) or None
     _dq_mode = str(_resolve(None, "dq_mode", "pm1"))
+
+    if category in ("co_shift", "co_marg", "co_marginalization"):
+        return syst_co_shift.run_syst_co_shift(
+            study,
+            chains=_chains,
+            draws=_draws,
+            tune=_tune,
+            target_accept=_target_accept,
+            force=force,
+            verbose=verbose,
+        )
 
     results = {}
     for p in study.points:
@@ -287,14 +301,22 @@ def collect_syst_results(
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """Merge systematic task CSVs, compute deltas against nominal, and record summary."""
+    scfg = getattr(study.cfg, "syst", None)
+    category = _resolve_category(study.cfg)
+
+    if category in ("co_shift", "co_marg", "co_marginalization"):
+        res = syst_co_shift.collect_syst_co_shift(
+            study,
+            bias_calibration=bias_calibration,
+            verbose=verbose,
+        )
+        return {"results_df": pd.DataFrame(), "summary": res["summary"]}
+
     merged_df = collect_study_results(study.study_dir, study.name)
     if merged_df.empty:
         if verbose:
             print(f"[WARN] No systematic task CSV results found in {study.study_dir}/tasks.")
         return {"results_df": merged_df, "summary": {}}
-
-    scfg = getattr(study.cfg, "syst", None)
-    category = _resolve_category(study.cfg)
 
     calib_dict: Dict[str, Any] = {}
     if isinstance(bias_calibration, dict):

@@ -1,5 +1,6 @@
 study:
   name: example_co_shift
+  type: syst
   description: "Co-60 energy shift validation study across [0.0, 0.8, 1.0, 1.2] keV"
 
 defaults:
@@ -12,9 +13,16 @@ defaults:
 reference:
   co_cut: gamma10_v150
   ndbd_cutoff: u1740
-  co_shift: 0.0
+  co_shift: 1.0
   ndbd_shift: 0.0
   blinded: false
 
 sweep:
   co_shift: [0.0, 0.8, 1.0, 1.2]
+
+syst:
+  category: co_shift
+  reference_co_shift: 1.0
+  bias_calibration: "studies/example_bias_study/bias_calibration.json"
+  estimator: mode
+  lp_var: pik

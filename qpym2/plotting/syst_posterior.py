@@ -209,13 +209,17 @@ def plot_multi_posterior_overlay(
     show_p16p84 : bool, optional
         Also draw dotted verticals at p16 and p84 for each series.
     """
-    from matplotlib.cm import get_cmap
+    try:
+        from matplotlib import colormaps
+        get_cmap = colormaps.get_cmap
+    except (ImportError, AttributeError):
+        from matplotlib.cm import get_cmap
     import matplotlib.colors as mcolors
 
     try:
         import seaborn as _sns
         colors = _sns.color_palette(palette, n_colors=len(samples_list))
-    except ImportError:
+    except (ImportError, Exception):
         cmap = get_cmap(palette)
         colors = [cmap(i / max(len(samples_list) - 1, 1))
                   for i in range(len(samples_list))]

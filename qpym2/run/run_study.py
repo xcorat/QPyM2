@@ -160,7 +160,7 @@ def parse_args():
     parser.add_argument(
         "--category",
         default=None,
-        help="Systematic category override (e.g. bmmc, lss_sscl, lss_dq, bm_threshold, bm_binning, bin_size)",
+        help="Systematic category override (e.g. bmmc, lss_sscl, lss_dq, bm_threshold, bm_binning, bin_size, co_shift)",
     )
     parser.add_argument(
         "--dq-mode",
